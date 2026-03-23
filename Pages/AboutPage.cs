@@ -103,7 +103,7 @@ public class AboutPage : UserControl
 
         var authorPanel = CreateInfoRow(iconFont, "\uE77B", "牛连杰", null, null);
         var websitePanel = CreateInfoRow(iconFont, "\uE774", "官网：", "www.jiuliu.org", "https://www.jiuliu.org");
-        var githubPanel = CreateInfoRow(iconFont, "\uEC7A", "开源地址：", "github.com/nljie1183/JIE-Clipboard", "https://github.com/nljie1183/JIE-Clipboard");
+        var githubPanel = CreateInfoRow(iconFont, "\uEC7A", "开源地址：", "github.com/nljie1103/JIE-Clipboard", "https://github.com/nljie1103/JIE-Clipboard");
 
         var copyrightLabel = new Label
         {
