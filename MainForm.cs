@@ -146,23 +146,27 @@ public class MainForm : Form
             Visible = true
         };
 
-        // Load icon (prefer PNG for better quality)
+        // Load icon from embedded resource
         try
         {
-            var baseDir = AppDomain.CurrentDomain.BaseDirectory;
-            var pngPath = Path.Combine(baseDir, "icon.png");
-            var icoPath = Path.Combine(baseDir, "icon.ico");
+            var assembly = System.Reflection.Assembly.GetExecutingAssembly();
+            var pngStream = assembly.GetManifestResourceStream("icon.png");
+            var icoStream = assembly.GetManifestResourceStream("icon.ico");
 
-            if (File.Exists(pngPath))
+            if (pngStream != null)
             {
-                using var original = new Bitmap(pngPath);
-                using var resized = new Bitmap(original, 64, 64);
-                var hIcon = resized.GetHicon();
-                _trayIcon.Icon = Icon.FromHandle(hIcon);
+                using (pngStream)
+                {
+                    using var original = new Bitmap(pngStream);
+                    using var resized = new Bitmap(original, 64, 64);
+                    var hIcon = resized.GetHicon();
+                    _trayIcon.Icon = Icon.FromHandle(hIcon);
+                }
             }
-            else if (File.Exists(icoPath))
+            else if (icoStream != null)
             {
-                _trayIcon.Icon = new Icon(icoPath);
+                using (icoStream)
+                    _trayIcon.Icon = new Icon(icoStream);
             }
             else
             {
