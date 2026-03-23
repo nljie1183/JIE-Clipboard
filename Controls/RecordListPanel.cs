@@ -9,7 +9,7 @@ public class RecordListPanel : Panel
     private List<ClipboardRecord> _records = new();
     private int _hoverIndex = -1;
     private int _scrollOffset = 0;
-    private int _itemHeight = 60;
+    private int _itemHeight = DpiHelper.Scale(60);
     private readonly VScrollBar _scrollBar;
     private readonly Dictionary<string, Image?> _thumbnailCache = new();
 
@@ -38,7 +38,7 @@ public class RecordListPanel : Panel
 
     public void SetItemHeight(int height)
     {
-        _itemHeight = Math.Max(40, height);
+        _itemHeight = Math.Max(DpiHelper.Scale(40), DpiHelper.Scale(height));
         UpdateScrollBar();
         Invalidate();
     }
@@ -128,13 +128,13 @@ public class RecordListPanel : Panel
         // Pin indicator
         if (record.IsPinned)
         {
-            using var pinFont = new Font("Segoe UI Emoji", 9f);
+            using var pinFont = new Font("Segoe UI Emoji", DpiHelper.ScaleF(9f));
             using var pinBrush = new SolidBrush(ThemeService.ThemeColor);
-            g.DrawString("📌", pinFont, pinBrush, rect.X + 5, rect.Y + 4);
+            g.DrawString("📌", pinFont, pinBrush, rect.X + DpiHelper.Scale(5), rect.Y + DpiHelper.Scale(4));
         }
 
-        int leftMargin = record.IsPinned ? 25 : 10;
-        int rightMargin = 100;
+        int leftMargin = record.IsPinned ? DpiHelper.Scale(25) : DpiHelper.Scale(10);
+        int rightMargin = DpiHelper.Scale(100);
         int contentWidth = rect.Width - leftMargin - rightMargin;
 
         // Content preview
@@ -146,7 +146,7 @@ public class RecordListPanel : Panel
         }
 
         var preview = ClipboardService.GetContentPreview(record, 120);
-        var textRect = new Rectangle(leftMargin, rect.Y + 8, contentWidth, _itemHeight - 16);
+        var textRect = new Rectangle(leftMargin, rect.Y + DpiHelper.Scale(8), contentWidth, _itemHeight - DpiHelper.Scale(16));
         using (var textBrush = new SolidBrush(ThemeService.TextColor))
         {
             var sf = new StringFormat
@@ -160,7 +160,7 @@ public class RecordListPanel : Panel
 
         // Time
         var timeStr = FormatTime(record.CreateTime);
-        var timeRect = new Rectangle(rect.Right - rightMargin, rect.Y + 8, rightMargin - 10, _itemHeight - 16);
+        var timeRect = new Rectangle(rect.Right - rightMargin, rect.Y + DpiHelper.Scale(8), rightMargin - DpiHelper.Scale(10), _itemHeight - DpiHelper.Scale(16));
         using (var timeBrush = new SolidBrush(ThemeService.SecondaryTextColor))
         {
             var sf = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center };
@@ -170,7 +170,7 @@ public class RecordListPanel : Panel
 
         // Bottom border
         using var pen = new Pen(ThemeService.BorderColor, 1);
-        g.DrawLine(pen, rect.Left + 10, rect.Bottom - 1, rect.Right - 10, rect.Bottom - 1);
+        g.DrawLine(pen, rect.Left + DpiHelper.Scale(10), rect.Bottom - 1, rect.Right - DpiHelper.Scale(10), rect.Bottom - 1);
     }
 
     private void DrawImageThumbnail(Graphics g, ClipboardRecord record, Rectangle rect)

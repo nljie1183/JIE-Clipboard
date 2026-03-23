@@ -24,7 +24,9 @@ internal static class Program
         Application.ThreadException += Application_ThreadException;
         AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
 
+        Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
         ApplicationConfiguration.Initialize();
+        DpiHelper.Initialize();
         Application.Run(new MainForm());
 
         // Cleanup mutex

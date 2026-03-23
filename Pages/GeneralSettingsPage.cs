@@ -20,7 +20,7 @@ public class GeneralSettingsPage : UserControl
         Dock = DockStyle.Fill;
         AutoScroll = true;
         BackColor = ThemeService.WindowBackground;
-        Padding = new Padding(30, 20, 30, 20);
+        Padding = new Padding(DpiHelper.Scale(30), DpiHelper.Scale(20), DpiHelper.Scale(30), DpiHelper.Scale(20));
         InitializeControls();
         LoadSettings();
     }
@@ -34,8 +34,8 @@ public class GeneralSettingsPage : UserControl
             ColumnCount = 3,
             Padding = new Padding(0)
         };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 200));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 250));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, DpiHelper.Scale(200)));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, DpiHelper.Scale(250)));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
         int row = 0;
@@ -45,15 +45,15 @@ public class GeneralSettingsPage : UserControl
 
         // Max record count
         _swMaxCount = new ToggleSwitch();
-        _numMaxCount = new NumericUpDown { Minimum = 1, Maximum = 100000, Value = 1000, Width = 120 };
+                _numMaxCount = new NumericUpDown { Minimum = 1, Maximum = 100000, Value = 1000, Width = DpiHelper.Scale(120) };
         _swMaxCount.CheckedChanged += (_, _) => { _numMaxCount.Enabled = _swMaxCount.Checked; SaveSettings(); };
         AddSettingRow(layout, "限制最大记录数", _swMaxCount, _numMaxCount, ref row);
 
         // Max content size
         _swMaxSize = new ToggleSwitch();
         var sizePanel = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, WrapContents = false };
-        _numMaxSize = new NumericUpDown { Minimum = 1, Maximum = 999999, Value = 100, Width = 100 };
-        _cboSizeUnit = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 60, Items = { "KB", "MB", "GB" } };
+        _numMaxSize = new NumericUpDown { Minimum = 1, Maximum = 999999, Value = 100, Width = DpiHelper.Scale(100) };
+        _cboSizeUnit = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = DpiHelper.Scale(60), Items = { "KB", "MB", "GB" } };
         _cboSizeUnit.SelectedItem = "MB";
         sizePanel.Controls.Add(_numMaxSize);
         sizePanel.Controls.Add(_cboSizeUnit);
@@ -88,14 +88,14 @@ public class GeneralSettingsPage : UserControl
 
         // Data path row
         layout.RowCount = row + 1;
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, DpiHelper.Scale(40)));
         var pathTitleLabel = new Label
         {
             Text = "存储位置",
             AutoSize = true,
             ForeColor = ThemeService.TextColor,
             Anchor = AnchorStyles.Left,
-            Padding = new Padding(10, 8, 0, 0)
+            Padding = new Padding(DpiHelper.Scale(10), DpiHelper.Scale(8), 0, 0)
         };
         layout.Controls.Add(pathTitleLabel, 0, row);
 
@@ -130,7 +130,7 @@ public class GeneralSettingsPage : UserControl
         {
             Text = "更改位置",
             FlatStyle = FlatStyle.Flat,
-            Size = new Size(80, 28),
+            Size = new Size(DpiHelper.Scale(80), DpiHelper.Scale(28)),
             ForeColor = ThemeService.ThemeColor,
             BackColor = ThemeService.WindowBackground
         };
@@ -141,7 +141,7 @@ public class GeneralSettingsPage : UserControl
         {
             Text = "恢复默认",
             FlatStyle = FlatStyle.Flat,
-            Size = new Size(80, 28),
+            Size = new Size(DpiHelper.Scale(80), DpiHelper.Scale(28)),
             ForeColor = ThemeService.SecondaryTextColor,
             BackColor = ThemeService.WindowBackground,
             Margin = new Padding(5, 0, 0, 0)
@@ -163,7 +163,7 @@ public class GeneralSettingsPage : UserControl
     private void AddSectionHeader(TableLayoutPanel layout, string text, ref int row)
     {
         layout.RowCount = row + 1;
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 45));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, DpiHelper.Scale(45)));
         var lbl = new Label
         {
             Text = text,
@@ -171,7 +171,7 @@ public class GeneralSettingsPage : UserControl
             ForeColor = ThemeService.TextColor,
             AutoSize = true,
             Anchor = AnchorStyles.Left,
-            Padding = new Padding(0, 10, 0, 0)
+            Padding = new Padding(0, DpiHelper.Scale(10), 0, 0)
         };
         layout.Controls.Add(lbl, 0, row);
         layout.SetColumnSpan(lbl, 3);
@@ -181,7 +181,7 @@ public class GeneralSettingsPage : UserControl
     private void AddSettingRow(TableLayoutPanel layout, string label, ToggleSwitch toggle, Control? extra, ref int row)
     {
         layout.RowCount = row + 1;
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, DpiHelper.Scale(40)));
 
         var lbl = new Label
         {
@@ -189,17 +189,17 @@ public class GeneralSettingsPage : UserControl
             AutoSize = true,
             ForeColor = ThemeService.TextColor,
             Anchor = AnchorStyles.Left,
-            Padding = new Padding(10, 8, 0, 0)
+            Padding = new Padding(DpiHelper.Scale(10), DpiHelper.Scale(8), 0, 0)
         };
         layout.Controls.Add(lbl, 0, row);
         layout.Controls.Add(toggle, 1, row);
         toggle.Anchor = AnchorStyles.Left;
-        toggle.Margin = new Padding(0, 8, 0, 0);
+        toggle.Margin = new Padding(0, DpiHelper.Scale(8), 0, 0);
 
         if (extra != null)
         {
             extra.Anchor = AnchorStyles.Left;
-            extra.Margin = new Padding(10, 5, 0, 0);
+            extra.Margin = new Padding(DpiHelper.Scale(10), DpiHelper.Scale(5), 0, 0);
             layout.Controls.Add(extra, 2, row);
         }
         row++;

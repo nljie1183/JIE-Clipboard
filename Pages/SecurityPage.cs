@@ -15,7 +15,7 @@ public class SecurityPage : UserControl
         Dock = DockStyle.Fill;
         AutoScroll = true;
         BackColor = ThemeService.WindowBackground;
-        Padding = new Padding(30, 20, 30, 20);
+        Padding = new Padding(DpiHelper.Scale(30), DpiHelper.Scale(20), DpiHelper.Scale(30), DpiHelper.Scale(20));
         InitializeControls();
         LoadSettings();
     }
@@ -110,15 +110,15 @@ public class SecurityPage : UserControl
             Text = "⚠ 警告：启用自动删除后，超过尝试次数的加密记录将被永久删除，无法恢复！",
             ForeColor = Color.FromArgb(220, 53, 69),
             AutoSize = true,
-            MaximumSize = new Size(550, 0),
-            Margin = new Padding(10, 0, 0, 15)
+            MaximumSize = new Size(DpiHelper.Scale(550), 0),
+            Margin = new Padding(DpiHelper.Scale(10), 0, 0, DpiHelper.Scale(15))
         };
         layout.Controls.Add(warningLabel);
 
         // Encrypted search
         var searchPanel = CreateSettingPanel("允许搜索加密内容：",
             "关闭时，搜索只匹配\"加密内容\"关键字");
-        _swSearchEncrypted = new ToggleSwitch { Margin = new Padding(10, 0, 0, 0) };
+        _swSearchEncrypted = new ToggleSwitch { Margin = new Padding(DpiHelper.Scale(10), 0, 0, 0) };
         _swSearchEncrypted.CheckedChanged += SwSearchEncrypted_Changed;
         var searchRow = (FlowLayoutPanel)searchPanel.Controls[0];
         searchRow.Controls.Add(_swSearchEncrypted);
@@ -129,8 +129,8 @@ public class SecurityPage : UserControl
             Text = "⚠ 启用搜索加密内容可能需要临时解密数据，存在安全风险。请谨慎使用。",
             ForeColor = Color.FromArgb(255, 140, 0),
             AutoSize = true,
-            MaximumSize = new Size(550, 0),
-            Margin = new Padding(10, 0, 0, 15)
+            MaximumSize = new Size(DpiHelper.Scale(550), 0),
+            Margin = new Padding(DpiHelper.Scale(10), 0, 0, DpiHelper.Scale(15))
         };
         layout.Controls.Add(searchWarning);
 
@@ -139,14 +139,14 @@ public class SecurityPage : UserControl
 
     private Panel CreateSettingPanel(string labelText, string descText)
     {
-        var container = new Panel { AutoSize = true, Width = 600, Margin = new Padding(0, 0, 0, 5) };
+        var container = new Panel { AutoSize = true, Width = DpiHelper.Scale(600), Margin = new Padding(0, 0, 0, DpiHelper.Scale(5)) };
 
         var row = new FlowLayoutPanel
         {
             FlowDirection = FlowDirection.LeftToRight,
             AutoSize = true,
             WrapContents = false,
-            Margin = new Padding(0, 5, 0, 0)
+            Margin = new Padding(0, DpiHelper.Scale(5), 0, 0)
         };
         row.Controls.Add(new Label
         {
@@ -154,7 +154,7 @@ public class SecurityPage : UserControl
             AutoSize = true,
             ForeColor = ThemeService.TextColor,
             Font = new Font(ThemeService.GlobalFont.FontFamily, 10f, FontStyle.Bold),
-            Margin = new Padding(10, 3, 0, 0)
+            Margin = new Padding(DpiHelper.Scale(10), DpiHelper.Scale(3), 0, 0)
         });
         container.Controls.Add(row);
 
@@ -163,9 +163,9 @@ public class SecurityPage : UserControl
             Text = descText,
             ForeColor = ThemeService.SecondaryTextColor,
             AutoSize = true,
-            MaximumSize = new Size(550, 0),
-            Margin = new Padding(10, 0, 0, 0),
-            Location = new Point(10, row.Bottom + 2)
+            MaximumSize = new Size(DpiHelper.Scale(550), 0),
+            Margin = new Padding(DpiHelper.Scale(10), 0, 0, 0),
+            Location = new Point(DpiHelper.Scale(10), row.Bottom + 2)
         };
         container.Controls.Add(desc);
 

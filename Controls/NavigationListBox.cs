@@ -14,8 +14,12 @@ public class NavigationListBox : Control
     private readonly List<NavItem> _items = new();
     private int _selectedIndex = 0;
     private int _hoverIndex = -1;
-    private const int ItemHeight = 40;
-    private const int IconSize = 20;
+
+    private int ItemHeight => DpiHelper.Scale(44);
+    private int IconSize => DpiHelper.Scale(24);
+    private int IconLeft => DpiHelper.Scale(16);
+    private int TextLeft => DpiHelper.Scale(48);
+    private float IconFontSize => DpiHelper.ScaleF(12f);
 
     public event EventHandler<int>? SelectedIndexChanged;
     public int SelectedIndex
@@ -60,27 +64,28 @@ public class NavigationListBox : Control
             g.Clear(ThemeService.SidebarBackground);
 
             var font = ThemeService.GlobalFont;
+            int itemH = ItemHeight;
 
             for (int i = 0; i < _items.Count; i++)
             {
-                var rect = new Rectangle(0, i * ItemHeight, Width, ItemHeight);
+                var rect = new Rectangle(0, i * itemH, Width, itemH);
                 var item = _items[i];
 
                 if (i == _selectedIndex)
                 {
                     using var brush = new SolidBrush(ThemeService.ThemeColor);
                     g.FillRectangle(brush, rect);
-                    DrawItem(g, item, rect, Color.White, font);
+                    DrawItem(g, item, rect, Color.White, font, itemH);
                 }
                 else if (i == _hoverIndex)
                 {
                     using var brush = new SolidBrush(ThemeService.HoverColor);
                     g.FillRectangle(brush, rect);
-                    DrawItem(g, item, rect, ThemeService.TextColor, font);
+                    DrawItem(g, item, rect, ThemeService.TextColor, font, itemH);
                 }
                 else
                 {
-                    DrawItem(g, item, rect, ThemeService.TextColor, font);
+                    DrawItem(g, item, rect, ThemeService.TextColor, font, itemH);
                 }
             }
         }
@@ -90,11 +95,15 @@ public class NavigationListBox : Control
         }
     }
 
-    private void DrawItem(Graphics g, NavItem item, Rectangle rect, Color textColor, Font font)
+    private void DrawItem(Graphics g, NavItem item, Rectangle rect, Color textColor, Font font, int itemH)
     {
+        int iconSize = IconSize;
+        int iconLeft = IconLeft;
+        int textLeft = TextLeft;
+
         // Icon
-        var iconRect = new Rectangle(15, rect.Y + (ItemHeight - IconSize) / 2, IconSize, IconSize);
-        using (var iconFont = new Font("Segoe UI Emoji", 11f))
+        var iconRect = new Rectangle(iconLeft, rect.Y + (itemH - iconSize) / 2, iconSize, iconSize);
+        using (var iconFont = new Font("Segoe UI Emoji", IconFontSize))
         using (var iconBrush = new SolidBrush(textColor))
         {
             var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
@@ -102,7 +111,7 @@ public class NavigationListBox : Control
         }
 
         // Text
-        var textRect = new Rectangle(45, rect.Y, rect.Width - 50, ItemHeight);
+        var textRect = new Rectangle(textLeft, rect.Y, rect.Width - textLeft - DpiHelper.Scale(5), itemH);
         using var textBrush = new SolidBrush(textColor);
         var textFormat = new StringFormat
         {
@@ -115,7 +124,8 @@ public class NavigationListBox : Control
 
     protected override void OnMouseMove(MouseEventArgs e)
     {
-        int index = e.Y / ItemHeight;
+        int itemH = ItemHeight;
+        int index = e.Y / itemH;
         if (index != _hoverIndex && index >= 0 && index < _items.Count)
         {
             _hoverIndex = index;
@@ -133,7 +143,8 @@ public class NavigationListBox : Control
 
     protected override void OnMouseClick(MouseEventArgs e)
     {
-        int index = e.Y / ItemHeight;
+        int itemH = ItemHeight;
+        int index = e.Y / itemH;
         if (index >= 0 && index < _items.Count)
             SelectedIndex = index;
         base.OnMouseClick(e);

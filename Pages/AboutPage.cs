@@ -19,7 +19,7 @@ public class AboutPage : UserControl
             Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.TopDown,
             WrapContents = false,
-            Padding = new Padding(50, 40, 50, 40),
+            Padding = new Padding(DpiHelper.Scale(50), DpiHelper.Scale(40), DpiHelper.Scale(50), DpiHelper.Scale(40)),
             AutoScroll = true
         };
 
@@ -36,7 +36,7 @@ public class AboutPage : UserControl
 
         var versionLabel = new Label
         {
-            Text = "版本 1.0.0.9",
+            Text = "版本 2.0.0.1",
             Font = new Font(ThemeService.GlobalFont.FontFamily, 11f),
             ForeColor = ThemeService.SecondaryTextColor,
             AutoSize = true,
@@ -49,15 +49,15 @@ public class AboutPage : UserControl
             Font = ThemeService.GlobalFont,
             ForeColor = ThemeService.TextColor,
             AutoSize = true,
-            MaximumSize = new Size(500, 0),
-            Margin = new Padding(0, 0, 0, 25)
+            MaximumSize = new Size(DpiHelper.Scale(500), 0),
+            Margin = new Padding(0, 0, 0, DpiHelper.Scale(25))
         };
 
         // Features
         var featuresGroup = new GroupBox
         {
             Text = "功能特性",
-            Size = new Size(500, 160),
+            Size = new Size(DpiHelper.Scale(500), DpiHelper.Scale(160)),
             ForeColor = ThemeService.TextColor,
             Font = ThemeService.GlobalFont,
             Margin = new Padding(0, 0, 0, 20)
@@ -73,8 +73,8 @@ public class AboutPage : UserControl
                    "✓ 单文件便携发布",
             ForeColor = ThemeService.TextColor,
             AutoSize = true,
-            Location = new Point(15, 25),
-            MaximumSize = new Size(470, 0)
+            Location = new Point(DpiHelper.Scale(15), DpiHelper.Scale(25)),
+            MaximumSize = new Size(DpiHelper.Scale(470), 0)
         };
         featuresGroup.Controls.Add(featuresLabel);
 
@@ -82,7 +82,7 @@ public class AboutPage : UserControl
         var techGroup = new GroupBox
         {
             Text = "技术栈",
-            Size = new Size(500, 80),
+            Size = new Size(DpiHelper.Scale(500), DpiHelper.Scale(80)),
             ForeColor = ThemeService.TextColor,
             Font = ThemeService.GlobalFont,
             Margin = new Padding(0, 0, 0, 20)
@@ -92,8 +92,8 @@ public class AboutPage : UserControl
             Text = ".NET 8.0 LTS  |  WinForms  |  C# 12  |  System.Security.Cryptography  |  Win32 API",
             ForeColor = ThemeService.SecondaryTextColor,
             AutoSize = true,
-            Location = new Point(15, 30),
-            MaximumSize = new Size(470, 0)
+            Location = new Point(DpiHelper.Scale(15), DpiHelper.Scale(30)),
+            MaximumSize = new Size(DpiHelper.Scale(470), 0)
         };
         techGroup.Controls.Add(techLabel);
 

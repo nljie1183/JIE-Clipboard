@@ -19,19 +19,13 @@ public static class ClipboardService
     {
         if (IsSelfWriting) return null;
 
-        try
+        // Retry with increasing delay for Win11 clipboard access reliability
+        for (int attempt = 0; attempt < 3; attempt++)
         {
-            bool opened = false;
-            for (int i = 0; i < 3; i++)
-            {
-                opened = Win32Api.OpenClipboard(IntPtr.Zero);
-                if (opened) break;
-                Thread.Sleep(100);
-            }
-            if (!opened) return null;
-
             try
             {
+                if (attempt > 0) Thread.Sleep(50 * attempt);
+
                 if (Clipboard.ContainsFileDropList())
                     return ReadFileDropList();
                 if (Clipboard.ContainsImage())
@@ -42,16 +36,18 @@ public static class ClipboardService
                     return ReadPlainText();
                 return null;
             }
-            finally
+            catch (System.Runtime.InteropServices.ExternalException) when (attempt < 2)
             {
-                Win32Api.CloseClipboard();
+                // Clipboard is locked by another process, retry
+                continue;
+            }
+            catch (Exception ex)
+            {
+                LogService.Log("Failed to read clipboard", ex);
+                return null;
             }
         }
-        catch (Exception ex)
-        {
-            LogService.Log("Failed to read clipboard", ex);
-            return null;
-        }
+        return null;
     }
 
     public static bool WriteToClipboard(ClipboardRecord record, string? decryptedContent = null)

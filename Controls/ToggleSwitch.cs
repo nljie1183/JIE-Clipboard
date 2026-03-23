@@ -3,6 +3,7 @@ using System.Drawing.Drawing2D;
 
 namespace JIE剪切板.Controls;
 
+
 public class ToggleSwitch : Control
 {
     private bool _checked;
@@ -20,7 +21,7 @@ public class ToggleSwitch : Control
     {
         SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint |
                  ControlStyles.OptimizedDoubleBuffer, true);
-        Size = new Size(44, 22);
+        Size = new Size(DpiHelper.Scale(44), DpiHelper.Scale(22));
         Cursor = Cursors.Hand;
     }
 

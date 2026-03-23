@@ -30,14 +30,14 @@ public class AllRecordsPage : UserControl
         _statsBar = new Panel
         {
             Dock = DockStyle.Bottom,
-            Height = 36,
+            Height = DpiHelper.Scale(36),
             BackColor = ThemeService.StatsBarBackground,
-            Padding = new Padding(15, 0, 15, 0)
+            Padding = new Padding(DpiHelper.Scale(15), 0, DpiHelper.Scale(15), 0)
         };
         _statsBar.Paint += StatsBar_Paint;
 
         // Search panel (top)
-        var searchPanel = new Panel { Dock = DockStyle.Top, Height = 50, Padding = new Padding(15, 10, 15, 5) };
+        var searchPanel = new Panel { Dock = DockStyle.Top, Height = DpiHelper.Scale(50), Padding = new Padding(DpiHelper.Scale(15), DpiHelper.Scale(10), DpiHelper.Scale(15), DpiHelper.Scale(5)) };
         _searchBox = new TextBox
         {
             Dock = DockStyle.Fill,
@@ -54,7 +54,7 @@ public class AllRecordsPage : UserControl
         searchPanel.Controls.Add(_searchBox);
 
         // Button panel
-        _buttonPanel = new Panel { Dock = DockStyle.Top, Height = 45, Padding = new Padding(15, 5, 15, 5) };
+        _buttonPanel = new Panel { Dock = DockStyle.Top, Height = DpiHelper.Scale(45), Padding = new Padding(DpiHelper.Scale(15), DpiHelper.Scale(5), DpiHelper.Scale(15), DpiHelper.Scale(5)) };
         var btnClearAll = CreateButton("清除全部记录", Color.FromArgb(220, 53, 69));
         btnClearAll.Click += BtnClearAll_Click;
         var btnClearBefore = CreateButton("清除指定日期前记录", ThemeService.ThemeColor);
@@ -85,8 +85,8 @@ public class AllRecordsPage : UserControl
         {
             Text = text,
             FlatStyle = FlatStyle.Flat,
-            Size = new Size(140, 30),
-            Margin = new Padding(0, 0, 10, 0),
+            Size = new Size(DpiHelper.Scale(140), DpiHelper.Scale(30)),
+            Margin = new Padding(0, 0, DpiHelper.Scale(10), 0),
             Font = new Font(ThemeService.GlobalFont.FontFamily, 8.5f),
             ForeColor = borderColor,
             BackColor = ThemeService.WindowBackground
@@ -439,17 +439,17 @@ public class AllRecordsPage : UserControl
             using var grayBrush = new SolidBrush(ThemeService.SecondaryTextColor);
             using var themeBrush = new SolidBrush(ThemeService.ThemeColor);
 
-            int x = 15;
+            int x = DpiHelper.Scale(15);
             var records = _mainForm.Records;
 
             x = DrawStat(g, "全部记录：", records.Count.ToString(), "条", x, font, boldFont, grayBrush, themeBrush);
-            x = DrawStat(g, "置顶记录：", records.Count(r => r.IsPinned).ToString(), "条", x + 30, font, boldFont, grayBrush, themeBrush);
-            x = DrawStat(g, "加密记录：", records.Count(r => r.IsEncrypted).ToString(), "条", x + 30, font, boldFont, grayBrush, themeBrush);
+            x = DrawStat(g, "置顶记录：", records.Count(r => r.IsPinned).ToString(), "条", x + DpiHelper.Scale(30), font, boldFont, grayBrush, themeBrush);
+            x = DrawStat(g, "加密记录：", records.Count(r => r.IsEncrypted).ToString(), "条", x + DpiHelper.Scale(30), font, boldFont, grayBrush, themeBrush);
 
             if (!string.IsNullOrEmpty(_searchText) && _searchText != "搜索剪贴板记录")
             {
                 var filtered = ApplySearch(records);
-                DrawStat(g, "搜索结果：", filtered.Count.ToString(), "条", x + 30, font, boldFont, grayBrush, themeBrush);
+                DrawStat(g, "搜索结果：", filtered.Count.ToString(), "条", x + DpiHelper.Scale(30), font, boldFont, grayBrush, themeBrush);
             }
         }
         catch { }

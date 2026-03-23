@@ -14,7 +14,7 @@ public class ExportImportPage : UserControl
         _mainForm = mainForm;
         Dock = DockStyle.Fill;
         BackColor = ThemeService.WindowBackground;
-        Padding = new Padding(30, 20, 30, 20);
+        Padding = new Padding(DpiHelper.Scale(30), DpiHelper.Scale(20), DpiHelper.Scale(30), DpiHelper.Scale(20));
         InitializeControls();
     }
 
@@ -50,10 +50,10 @@ public class ExportImportPage : UserControl
         var exportGroup = new GroupBox
         {
             Text = "导出",
-            Size = new Size(500, 180),
+            Size = new Size(DpiHelper.Scale(500), DpiHelper.Scale(180)),
             ForeColor = ThemeService.TextColor,
             Font = ThemeService.GlobalFont,
-            Margin = new Padding(0, 0, 0, 15)
+            Margin = new Padding(0, 0, 0, DpiHelper.Scale(15))
         };
 
         _chkExportRecords = new CheckBox
@@ -61,7 +61,7 @@ public class ExportImportPage : UserControl
             Text = "导出剪贴板记录",
             Checked = true,
             AutoSize = true,
-            Location = new Point(20, 30),
+            Location = DpiHelper.Scale(new Point(20, 30)),
             ForeColor = ThemeService.TextColor
         };
 
@@ -70,7 +70,7 @@ public class ExportImportPage : UserControl
             Text = "导出应用设置",
             Checked = true,
             AutoSize = true,
-            Location = new Point(20, 60),
+            Location = DpiHelper.Scale(new Point(20, 60)),
             ForeColor = ThemeService.TextColor
         };
 
@@ -79,16 +79,16 @@ public class ExportImportPage : UserControl
             Text = "注意：加密记录将以密文形式导出，导入后仍需密码解密。\n图片文件不包含在导出中，仅导出路径引用。",
             ForeColor = ThemeService.SecondaryTextColor,
             AutoSize = true,
-            MaximumSize = new Size(450, 0),
-            Location = new Point(20, 90)
+            MaximumSize = new Size(DpiHelper.Scale(450), 0),
+            Location = DpiHelper.Scale(new Point(20, 90))
         };
 
         var btnExport = new Button
         {
             Text = "选择位置并导出",
             FlatStyle = FlatStyle.Flat,
-            Size = new Size(140, 35),
-            Location = new Point(20, 135),
+            Size = DpiHelper.Scale(new Size(140, 35)),
+            Location = DpiHelper.Scale(new Point(20, 135)),
             BackColor = ThemeService.ThemeColor,
             ForeColor = Color.White
         };
@@ -102,10 +102,10 @@ public class ExportImportPage : UserControl
         var importGroup = new GroupBox
         {
             Text = "导入",
-            Size = new Size(500, 180),
+            Size = new Size(DpiHelper.Scale(500), DpiHelper.Scale(180)),
             ForeColor = ThemeService.TextColor,
             Font = ThemeService.GlobalFont,
-            Margin = new Padding(0, 0, 0, 15)
+            Margin = new Padding(0, 0, 0, DpiHelper.Scale(15))
         };
 
         var importDesc = new Label
@@ -113,16 +113,16 @@ public class ExportImportPage : UserControl
             Text = "从备份文件恢复数据。导入时可以选择：\n• 合并模式：保留现有数据，合并导入的新记录\n• 覆盖模式：清除现有数据，完全使用导入的数据",
             ForeColor = ThemeService.TextColor,
             AutoSize = true,
-            MaximumSize = new Size(450, 0),
-            Location = new Point(20, 30)
+            MaximumSize = new Size(DpiHelper.Scale(450), 0),
+            Location = DpiHelper.Scale(new Point(20, 30))
         };
 
         var btnImportMerge = new Button
         {
             Text = "合并导入",
             FlatStyle = FlatStyle.Flat,
-            Size = new Size(100, 35),
-            Location = new Point(20, 120),
+            Size = DpiHelper.Scale(new Size(100, 35)),
+            Location = DpiHelper.Scale(new Point(20, 120)),
             ForeColor = ThemeService.ThemeColor,
             BackColor = ThemeService.WindowBackground
         };
@@ -133,8 +133,8 @@ public class ExportImportPage : UserControl
         {
             Text = "覆盖导入",
             FlatStyle = FlatStyle.Flat,
-            Size = new Size(100, 35),
-            Location = new Point(130, 120),
+            Size = DpiHelper.Scale(new Size(100, 35)),
+            Location = DpiHelper.Scale(new Point(130, 120)),
             ForeColor = Color.FromArgb(220, 53, 69),
             BackColor = ThemeService.WindowBackground
         };

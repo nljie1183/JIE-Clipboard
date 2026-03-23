@@ -72,6 +72,12 @@ public static class Win32Api
     public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 
     public const int SW_RESTORE = 9;
+    public const int SW_SHOWNOACTIVATE = 4;
+
+    // Window activation
+    public const int WM_MOUSEACTIVATE = 0x0021;
+    public const int MA_NOACTIVATE = 3;
+    public const int MA_NOACTIVATEANDEAT = 4;
 
     #endregion
 

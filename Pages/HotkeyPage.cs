@@ -18,7 +18,7 @@ public class HotkeyPage : UserControl
         _mainForm = mainForm;
         Dock = DockStyle.Fill;
         BackColor = ThemeService.WindowBackground;
-        Padding = new Padding(30, 20, 30, 20);
+        Padding = new Padding(DpiHelper.Scale(30), DpiHelper.Scale(20), DpiHelper.Scale(30), DpiHelper.Scale(20));
         InitializeControls();
         LoadSettings();
     }
@@ -31,7 +31,7 @@ public class HotkeyPage : UserControl
             Font = new Font(ThemeService.GlobalFont.FontFamily, 14f, FontStyle.Bold),
             ForeColor = ThemeService.TextColor,
             AutoSize = true,
-            Location = new Point(30, 20)
+            Location = DpiHelper.Scale(new Point(30, 20))
         };
 
         var descLabel = new Label
@@ -40,14 +40,14 @@ public class HotkeyPage : UserControl
             Font = ThemeService.GlobalFont,
             ForeColor = ThemeService.SecondaryTextColor,
             AutoSize = true,
-            Location = new Point(30, 55)
+            Location = DpiHelper.Scale(new Point(30, 55))
         };
 
         var groupBox = new GroupBox
         {
             Text = "唤醒快捷键",
-            Location = new Point(30, 90),
-            Size = new Size(500, 200),
+            Location = DpiHelper.Scale(new Point(30, 90)),
+            Size = DpiHelper.Scale(new Size(500, 200)),
             ForeColor = ThemeService.TextColor,
             Font = ThemeService.GlobalFont
         };
@@ -55,15 +55,15 @@ public class HotkeyPage : UserControl
         var lblHotkey = new Label
         {
             Text = "当前快捷键：",
-            Location = new Point(20, 35),
+            Location = DpiHelper.Scale(new Point(20, 35)),
             AutoSize = true,
             ForeColor = ThemeService.TextColor
         };
 
         _txtHotkey = new TextBox
         {
-            Location = new Point(110, 32),
-            Size = new Size(200, 25),
+            Location = DpiHelper.Scale(new Point(110, 32)),
+            Size = DpiHelper.Scale(new Size(200, 25)),
             ReadOnly = true,
             BackColor = ThemeService.IsDarkMode ? Color.FromArgb(50, 50, 50) : Color.White,
             ForeColor = ThemeService.TextColor,
@@ -79,7 +79,7 @@ public class HotkeyPage : UserControl
         var lblTip = new Label
         {
             Text = "点击输入框后按下想要设置的快捷键组合（需包含修饰键）",
-            Location = new Point(20, 70),
+            Location = DpiHelper.Scale(new Point(20, 70)),
             AutoSize = true,
             ForeColor = ThemeService.SecondaryTextColor,
             Font = new Font(ThemeService.GlobalFont.FontFamily, 8.5f)
@@ -88,8 +88,8 @@ public class HotkeyPage : UserControl
         _btnSave = new Button
         {
             Text = "保存",
-            Location = new Point(20, 110),
-            Size = new Size(80, 32),
+            Location = DpiHelper.Scale(new Point(20, 110)),
+            Size = DpiHelper.Scale(new Size(80, 32)),
             FlatStyle = FlatStyle.Flat,
             BackColor = ThemeService.ThemeColor,
             ForeColor = Color.White
@@ -100,8 +100,8 @@ public class HotkeyPage : UserControl
         _btnTest = new Button
         {
             Text = "测试",
-            Location = new Point(110, 110),
-            Size = new Size(80, 32),
+            Location = DpiHelper.Scale(new Point(110, 110)),
+            Size = DpiHelper.Scale(new Size(80, 32)),
             FlatStyle = FlatStyle.Flat,
             ForeColor = ThemeService.ThemeColor,
             BackColor = ThemeService.WindowBackground
@@ -112,8 +112,8 @@ public class HotkeyPage : UserControl
         _btnReset = new Button
         {
             Text = "恢复默认",
-            Location = new Point(200, 110),
-            Size = new Size(80, 32),
+            Location = DpiHelper.Scale(new Point(200, 110)),
+            Size = DpiHelper.Scale(new Size(80, 32)),
             FlatStyle = FlatStyle.Flat,
             ForeColor = ThemeService.SecondaryTextColor,
             BackColor = ThemeService.WindowBackground
@@ -124,7 +124,7 @@ public class HotkeyPage : UserControl
         _lblStatus = new Label
         {
             Text = "",
-            Location = new Point(20, 155),
+            Location = DpiHelper.Scale(new Point(20, 155)),
             AutoSize = true,
             ForeColor = Color.Green
         };

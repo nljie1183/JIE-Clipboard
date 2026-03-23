@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using JIE剪切板.Models;
@@ -11,6 +12,10 @@ public static class FileService
     private static string _dataFolder;
     private static string _recordsFile;
     private static string _imagesFolder;
+
+    // Data-at-rest encryption key derived from machine identity
+    private static readonly byte[] _storageKey;
+    private static readonly byte[] _storageSalt = System.Text.Encoding.UTF8.GetBytes("JIE剪切板_Storage_v2");
 
     private static readonly JsonSerializerOptions _jsonOptions = new()
     {
@@ -28,14 +33,20 @@ public static class FileService
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "JIE剪切板");
         _configFile = Path.Combine(_configFolder, "config.json");
         _dataFolder = _configFolder;
-        _recordsFile = Path.Combine(_dataFolder, "records.json");
+        _recordsFile = Path.Combine(_dataFolder, "records.dat");
         _imagesFolder = Path.Combine(_dataFolder, "Images");
+
+        // Derive storage key from machine + user identity
+        var identity = $"{Environment.MachineName}|{Environment.UserName}|JIE剪切板_SecureStorage";
+        var identityBytes = System.Text.Encoding.UTF8.GetBytes(identity);
+        using var pbkdf2 = new Rfc2898DeriveBytes(identityBytes, _storageSalt, 50000, HashAlgorithmName.SHA256);
+        _storageKey = pbkdf2.GetBytes(32);
     }
 
     public static void SetCustomDataFolder(string? folder)
     {
         _dataFolder = string.IsNullOrEmpty(folder) ? _configFolder : folder;
-        _recordsFile = Path.Combine(_dataFolder, "records.json");
+        _recordsFile = Path.Combine(_dataFolder, "records.dat");
         _imagesFolder = Path.Combine(_dataFolder, "Images");
         EnsureDirectories();
     }
@@ -50,12 +61,20 @@ public static class FileService
             if (!Directory.Exists(newFolder))
                 Directory.CreateDirectory(newFolder);
 
-            var newRecordsFile = Path.Combine(newFolder, "records.json");
+            var newRecordsFile = Path.Combine(newFolder, "records.dat");
             var newImagesFolder = Path.Combine(newFolder, "Images");
 
-            // Copy records file
+            // Copy records file (.dat or .json)
             if (File.Exists(oldRecordsFile) && !File.Exists(newRecordsFile))
                 File.Copy(oldRecordsFile, newRecordsFile);
+            else
+            {
+                // Also check for old .json format
+                var oldJsonFile = Path.ChangeExtension(oldRecordsFile, ".json");
+                var newJsonFile = Path.Combine(newFolder, "records.json");
+                if (File.Exists(oldJsonFile) && !File.Exists(newJsonFile))
+                    File.Copy(oldJsonFile, newJsonFile);
+            }
 
             // Copy images folder
             if (Directory.Exists(oldImagesFolder))
@@ -132,10 +151,30 @@ public static class FileService
     {
         try
         {
-            if (!File.Exists(_recordsFile)) return new List<ClipboardRecord>();
-            var json = File.ReadAllText(_recordsFile);
-            return JsonSerializer.Deserialize<List<ClipboardRecord>>(json, _jsonOptions)
-                   ?? new List<ClipboardRecord>();
+            // Try loading encrypted format first (.dat)
+            if (File.Exists(_recordsFile))
+            {
+                var encryptedBytes = File.ReadAllBytes(_recordsFile);
+                var json = DecryptStorage(encryptedBytes);
+                if (json != null)
+                    return JsonSerializer.Deserialize<List<ClipboardRecord>>(json, _jsonOptions)
+                           ?? new List<ClipboardRecord>();
+            }
+
+            // Migrate from old unencrypted format (.json)
+            var oldJsonFile = Path.Combine(_dataFolder, "records.json");
+            if (File.Exists(oldJsonFile))
+            {
+                var json = File.ReadAllText(oldJsonFile);
+                var records = JsonSerializer.Deserialize<List<ClipboardRecord>>(json, _jsonOptions)
+                              ?? new List<ClipboardRecord>();
+                // Re-save in encrypted format and remove old file
+                SaveRecords(records);
+                try { File.Delete(oldJsonFile); } catch { }
+                return records;
+            }
+
+            return new List<ClipboardRecord>();
         }
         catch (Exception ex)
         {
@@ -151,13 +190,62 @@ public static class FileService
         {
             EnsureDirectories();
             var json = JsonSerializer.Serialize(records, _jsonOptions);
-            File.WriteAllText(_recordsFile, json);
+            var encryptedBytes = EncryptStorage(json);
+            File.WriteAllBytes(_recordsFile, encryptedBytes);
             return true;
         }
         catch (Exception ex)
         {
             LogService.Log("Failed to save records", ex);
             return false;
+        }
+    }
+
+    private static byte[] EncryptStorage(string plainText)
+    {
+        var iv = RandomNumberGenerator.GetBytes(16);
+        using var aes = Aes.Create();
+        aes.KeySize = 256;
+        aes.Mode = CipherMode.CBC;
+        aes.Padding = PaddingMode.PKCS7;
+        aes.Key = _storageKey;
+        aes.IV = iv;
+
+        var plainBytes = System.Text.Encoding.UTF8.GetBytes(plainText);
+        using var encryptor = aes.CreateEncryptor();
+        var encrypted = encryptor.TransformFinalBlock(plainBytes, 0, plainBytes.Length);
+
+        // Format: [IV 16 bytes][encrypted data]
+        var result = new byte[16 + encrypted.Length];
+        Buffer.BlockCopy(iv, 0, result, 0, 16);
+        Buffer.BlockCopy(encrypted, 0, result, 16, encrypted.Length);
+        return result;
+    }
+
+    private static string? DecryptStorage(byte[] data)
+    {
+        if (data.Length < 17) return null;
+        try
+        {
+            var iv = new byte[16];
+            Buffer.BlockCopy(data, 0, iv, 0, 16);
+            var encrypted = new byte[data.Length - 16];
+            Buffer.BlockCopy(data, 16, encrypted, 0, encrypted.Length);
+
+            using var aes = Aes.Create();
+            aes.KeySize = 256;
+            aes.Mode = CipherMode.CBC;
+            aes.Padding = PaddingMode.PKCS7;
+            aes.Key = _storageKey;
+            aes.IV = iv;
+
+            using var decryptor = aes.CreateDecryptor();
+            var decrypted = decryptor.TransformFinalBlock(encrypted, 0, encrypted.Length);
+            return System.Text.Encoding.UTF8.GetString(decrypted);
+        }
+        catch
+        {
+            return null;
         }
     }
 

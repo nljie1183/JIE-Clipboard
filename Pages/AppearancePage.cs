@@ -17,7 +17,7 @@ public class AppearancePage : UserControl
         Dock = DockStyle.Fill;
         AutoScroll = true;
         BackColor = ThemeService.WindowBackground;
-        Padding = new Padding(30, 20, 30, 20);
+        Padding = new Padding(DpiHelper.Scale(30), DpiHelper.Scale(20), DpiHelper.Scale(30), DpiHelper.Scale(20));
         InitializeControls();
         LoadSettings();
     }

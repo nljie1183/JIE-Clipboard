@@ -31,6 +31,11 @@ public class MainForm : Form
     private IntPtr _previousForegroundWindow;
     private bool _isMonitoring;
     private bool _isExiting;
+    private bool _pasteMode;
+    private System.Windows.Forms.Timer? _clipboardWatchdog;
+
+    // Prevent window activation when in paste mode (like Win+V behavior)
+    protected override bool ShowWithoutActivation => _pasteMode;
 
     public MainForm()
     {
@@ -61,7 +66,7 @@ public class MainForm : Form
         int w = Math.Max(800, (int)(workArea.Width * 0.55));
         int h = Math.Max(550, (int)(workArea.Height * 0.7));
         Size = new Size(w, h);
-        MinimumSize = new Size(750, 500);
+        MinimumSize = new Size(DpiHelper.Scale(750), DpiHelper.Scale(500));
         StartPosition = FormStartPosition.CenterScreen;
         FormBorderStyle = FormBorderStyle.Sizable;
         MaximizeBox = true;
@@ -75,11 +80,13 @@ public class MainForm : Form
         _splitContainer = new SplitContainer
         {
             Dock = DockStyle.Fill,
-            SplitterDistance = 200,
+            SplitterDistance = DpiHelper.Scale(220),
             FixedPanel = FixedPanel.Panel1,
-            IsSplitterFixed = true,
-            SplitterWidth = 1
+            IsSplitterFixed = false,
+            SplitterWidth = DpiHelper.Scale(4)
         };
+        _splitContainer.Panel1MinSize = DpiHelper.Scale(160);
+        _splitContainer.Panel2MinSize = DpiHelper.Scale(400);
         _splitContainer.Panel1.BackColor = ThemeService.SidebarBackground;
         _splitContainer.Panel2.BackColor = ThemeService.WindowBackground;
 
@@ -96,7 +103,7 @@ public class MainForm : Form
         {
             Text = "恢复所有默认设置",
             Dock = DockStyle.Bottom,
-            Height = 40,
+            Height = DpiHelper.Scale(40),
             FlatStyle = FlatStyle.Flat,
             BackColor = Color.FromArgb(220, 53, 69),
             ForeColor = Color.White,
@@ -127,7 +134,7 @@ public class MainForm : Form
         _trayMenu = new ContextMenuStrip();
 
         var menuShow = new ToolStripMenuItem("显示主窗口");
-        menuShow.Click += (_, _) => ShowMainWindow();
+        menuShow.Click += (_, _) => ShowMainWindow(forPaste: false);
 
         var menuMonitor = new ToolStripMenuItem("监听剪贴板");
         menuMonitor.CheckOnClick = true;
@@ -182,7 +189,7 @@ public class MainForm : Form
         _trayIcon.MouseClick += (_, e) =>
         {
             if (e.Button == MouseButtons.Left)
-                ShowMainWindow();
+                ShowMainWindow(forPaste: false);
         };
     }
 
@@ -201,12 +208,14 @@ public class MainForm : Form
         _hotkeyService.Initialize(Handle);
         RegisterWakeHotkey();
 
-        // Start monitoring if configured
-        if (Config.AutoStartMonitoring)
-        {
-            _isMonitoring = true;
-            UpdateMonitoringUI();
-        }
+        // Always start monitoring on launch
+        _isMonitoring = true;
+        UpdateMonitoringUI();
+
+        // Start clipboard watchdog timer to ensure monitoring stays active on Win11
+        _clipboardWatchdog = new System.Windows.Forms.Timer { Interval = 30000 }; // 30s
+        _clipboardWatchdog.Tick += ClipboardWatchdog_Tick;
+        _clipboardWatchdog.Start();
 
         // Cleanup expired records
         CleanupExpiredRecords();
@@ -222,6 +231,8 @@ public class MainForm : Form
         }
 
         // Cleanup
+        _clipboardWatchdog?.Stop();
+        _clipboardWatchdog?.Dispose();
         Win32Api.RemoveClipboardFormatListener(Handle);
         _hotkeyService.Dispose();
         _trayIcon.Visible = false;
@@ -236,6 +247,8 @@ public class MainForm : Form
     protected override void OnDeactivate(EventArgs e)
     {
         base.OnDeactivate(e);
+        // Don't auto-hide in paste mode (window isn't activated)
+        if (_pasteMode) return;
         if (Config.HideOnLostFocus && Visible && !_isExiting)
         {
             Hide();
@@ -244,6 +257,14 @@ public class MainForm : Form
 
     protected override void WndProc(ref Message m)
     {
+        // In paste mode, prevent window activation on mouse click
+        // so the original app keeps keyboard focus (like Win+V)
+        if (m.Msg == Win32Api.WM_MOUSEACTIVATE && _pasteMode)
+        {
+            m.Result = (IntPtr)Win32Api.MA_NOACTIVATE;
+            return;
+        }
+
         if (m.Msg == Win32Api.WM_CLIPBOARDUPDATE)
         {
             OnClipboardUpdate();
@@ -368,6 +389,26 @@ public class MainForm : Form
         }
     }
 
+    private void ClipboardWatchdog_Tick(object? sender, EventArgs e)
+    {
+        // Re-register clipboard listener to handle Win11 silently dropping it
+        try
+        {
+            if (_isMonitoring && IsHandleCreated && !_isExiting)
+            {
+                Win32Api.RemoveClipboardFormatListener(Handle);
+                if (!Win32Api.AddClipboardFormatListener(Handle))
+                {
+                    LogService.Log("Clipboard watchdog: failed to re-register listener");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            LogService.Log("Clipboard watchdog failed", ex);
+        }
+    }
+
     #endregion
 
     #region Record Operations
@@ -397,20 +438,23 @@ public class MainForm : Form
         try
         {
             var targetWindow = _previousForegroundWindow;
+            bool wasPasteMode = _pasteMode;
+            _pasteMode = false;
+            TopMost = false;
             Hide();
 
-            if (targetWindow != IntPtr.Zero)
+            if (wasPasteMode)
             {
-                // Wait for our window to fully hide
+                // Original window still has focus, just send Ctrl+V
                 Thread.Sleep(50);
-
-                // Restore the previous foreground window
+                Win32Api.SendCtrlV();
+            }
+            else if (targetWindow != IntPtr.Zero)
+            {
+                // Need to restore focus first
+                Thread.Sleep(50);
                 Win32Api.SetForegroundWindow(targetWindow);
-
-                // Wait for focus restoration
                 Thread.Sleep(100);
-
-                // Send Ctrl+V
                 Win32Api.SendCtrlV();
             }
         }
@@ -452,15 +496,43 @@ public class MainForm : Form
 
     private void ShowMainWindow()
     {
+        ShowMainWindow(forPaste: true);
+    }
+
+    private void ShowMainWindow(bool forPaste)
+    {
+        // Toggle: if already visible, hide
+        if (Visible && !_isExiting)
+        {
+            _pasteMode = false;
+            TopMost = false;
+            Hide();
+            return;
+        }
+
         // Save the current foreground window for auto-paste
         _previousForegroundWindow = Win32Api.GetForegroundWindow();
 
         if (WindowState == FormWindowState.Minimized)
             WindowState = FormWindowState.Normal;
 
-        Show();
-        Activate();
-        BringToFront();
+        _pasteMode = forPaste;
+
+        if (forPaste)
+        {
+            // Paste mode: show without stealing focus (like Win+V)
+            // Original app keeps keyboard focus, mouse can click records
+            TopMost = true;
+            Show();
+        }
+        else
+        {
+            // Settings mode: normal window with full activation
+            TopMost = false;
+            Show();
+            Activate();
+            BringToFront();
+        }
 
         // Refresh records page
         RefreshCurrentPage();
