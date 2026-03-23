@@ -1,0 +1,91 @@
+项目整体架构
+这是一个基于 .NET 8.0 + WinForms + C# 12 的 Windows 剪贴板管理工具，编译为单文件自包含 exe（约71MB，无需安装 .NET 运行时）。
+
+
+JIE剪切板/
+│
+├── Program.cs              ← 程序入口：单实例检测（Mutex）+ 全局异常处理
+├── MainForm.cs             ← 主窗口：左右分栏布局、托盘图标、剪贴板监听、快捷键
+├── JIE剪切板.csproj        ← 项目配置：构建参数、图标、发布设置
+├── JIE剪切板.sln           ← 解决方案文件
+├── global.json             ← SDK 版本策略（允许高版本 SDK）
+├── icon.ico                ← ★ 应用图标源文件（嵌入 exe + 复制到输出目录）
+├── icon.png                ← ★ 高清 PNG 图标（托盘图标优先使用）
+├── README.md               ← 项目说明
+├── LICENSE                 ← MIT 开源协议
+│
+├── Models/                 ← 数据模型
+│   ├── AppConfig.cs        ← 应用配置（主题、限制、快捷键、安全策略等）
+│   └── ClipboardRecord.cs  ← 剪贴板记录（支持6种类型 + AES加密 + 安全锁定）
+│
+├── Services/               ← 业务逻辑层
+│   ├── ClipboardService.cs ← 剪贴板读写（文本/富文本/图片/文件/视频/文件夹）
+│   ├── EncryptionService.cs← AES-256-CBC 加密 + PBKDF2 密码派生
+│   ├── FileService.cs      ← 数据持久化（JSON序列化，支持自定义存储路径）
+│   ├── HotkeyService.cs    ← 全局快捷键注册（Win32 RegisterHotKey）
+│   ├── LogService.cs       ← 日志（按日轮转，自动清理7天前）
+│   └── ThemeService.cs     ← 主题管理（浅色/深色/跟随系统）
+│
+├── Controls/               ← 自定义控件
+│   ├── NavigationListBox.cs← 左侧导航栏（7个页面，GDI+自绘）
+│   ├── RecordListPanel.cs  ← 记录列表（虚拟滚动 + 缩略图缓存）
+│   └── ToggleSwitch.cs     ← 开关控件（自绘圆形滑块）
+│
+├── Dialogs/                ← 对话框
+│   ├── EditRecordDialog.cs ← 编辑记录（过期时间/复制次数限制/加密）
+│   └── PasswordDialog.cs   ← 密码输入框
+│
+├── Pages/                  ← 7个设置页面
+│   ├── AllRecordsPage.cs   ← 全部记录（搜索/排序/批量操作/安全验证）
+│   ├── GeneralSettingsPage.cs ← 通用设置（存储限制/自启动/数据路径）
+│   ├── HotkeyPage.cs       ← 快捷键设置（录入+验证）
+│   ├── AppearancePage.cs   ← 外观（主题模式/颜色/字体）
+│   ├── SecurityPage.cs     ← 安全防护（密码策略/指数锁定/自动删除）
+│   ├── ExportImportPage.cs ← 导出导入（JSON备份，合并或覆盖）
+│   └── AboutPage.cs        ← 关于（作者/官网/开源地址）
+│
+├── Native/                 ← Win32 API
+│   └── Win32Api.cs         ← P/Invoke 声明（剪贴板/快捷键/窗口/输入模拟/Mutex）
+│
+└── bin/Release/win-x64/publish/  ← ★ 最终发布输出
+    ├── JIE剪切板.exe       ← 单文件自包含 exe（带嵌入图标）
+    ├── icon.ico             ← 图标文件（运行时备用）
+    └── icon.png             ← 高清图标（运行时托盘优先加载）
+
+
+图标工作方式
+图标存在于 三个层级：
+
+层级	位置	作用
+源文件	项目根目录 icon.ico / icon.png	构建时使用
+嵌入 exe	csproj 中 <ApplicationIcon>icon.ico</ApplicationIcon>	exe 文件图标、快捷方式图标
+运行时复制	icon.png + icon.ico	托盘图标（PNG优先，更清晰）
+
+代码中的加载逻辑（MainForm.cs:150-168）：
+1. 优先加载 exe 同目录的 icon.png（缩放到64x64后转Icon）
+2. 回退到 icon.ico
+3. 最终回退到 SystemIcons.Application
+
+构建命令
+# 发布为独立单文件 exe（需先关闭运行中的程序）
+dotnet publish -c Release
+
+输出：\bin\Release\win-x64\publish\JIE剪切板.exe
+
+关键的 csproj 配置决定了构建行为：
+
+PublishSingleFile=true → 打包为单个 exe
+SelfContained=true → 内含 .NET 运行时
+RuntimeIdentifier=win-x64 → 目标平台
+EnableCompressionInSingleFile=true → 压缩减小体积
+ApplicationIcon=icon.ico → exe 嵌入图标
+<Content Include="icon.png" CopyToOutputDirectory="PreserveNewest" /> → 运行时图标
+
+数据存储位置
+默认：[%AppData%\JIE剪切板](http://_vscodecontentref_/7)，包含：
+
+config.json — 配置文件（始终在此位置）
+records.json — 剪贴板记录
+Images\ — 图片文件
+Logs\ — 日志文件
+用户可在"通用设置"中自定义 records/images 的存储路径。
