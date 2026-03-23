@@ -80,13 +80,10 @@ public class MainForm : Form
         _splitContainer = new SplitContainer
         {
             Dock = DockStyle.Fill,
-            SplitterDistance = DpiHelper.Scale(220),
             FixedPanel = FixedPanel.Panel1,
             IsSplitterFixed = false,
             SplitterWidth = DpiHelper.Scale(4)
         };
-        _splitContainer.Panel1MinSize = DpiHelper.Scale(160);
-        _splitContainer.Panel2MinSize = DpiHelper.Scale(400);
         _splitContainer.Panel1.BackColor = ThemeService.SidebarBackground;
         _splitContainer.Panel2.BackColor = ThemeService.WindowBackground;
 
@@ -200,6 +197,15 @@ public class MainForm : Form
     protected override void OnLoad(EventArgs e)
     {
         base.OnLoad(e);
+
+        // Set splitter constraints after form has its real size
+        try
+        {
+            _splitContainer.Panel1MinSize = DpiHelper.Scale(140);
+            _splitContainer.Panel2MinSize = DpiHelper.Scale(300);
+            _splitContainer.SplitterDistance = DpiHelper.Scale(220);
+        }
+        catch { }
 
         // Register clipboard listener
         Win32Api.AddClipboardFormatListener(Handle);
