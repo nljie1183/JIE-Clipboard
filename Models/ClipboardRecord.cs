@@ -24,6 +24,7 @@ public class ClipboardRecord
 
     // Encryption
     public bool IsEncrypted { get; set; }
+    public string? EncryptedHint { get; set; }
     public string? EncryptedData { get; set; }
     public string? Salt { get; set; }
     public string? IV { get; set; }

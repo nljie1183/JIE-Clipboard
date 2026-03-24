@@ -21,12 +21,13 @@
 |:---|:---|
 | 🚀 **轻量便携** | 单 EXE 文件直接运行，无需安装，无广告 |
 | 📝 **多格式支持** | 文本、富文本、图片、文件、视频、文件夹 |
-| 🔒 **AES-256 加密** | PBKDF2 密码派生（100,000 次迭代），保护敏感数据 |
+| 🔒 **AES-256 加密** | PBKDF2 密码派生（100,000 次迭代），支持自定义加密提示文字 |
+| 💾 **持久化加密存储** | 按类型（图片/文件/视频/文件夹）DPAPI 加密本地缓存 |
 | ⌨️ **全局快捷键** | 自定义快捷键，随时唤醒（默认 `Ctrl+1`） |
 | 🎨 **主题切换** | 浅色 / 深色 / 跟随系统，支持自定义主题色和字体 |
-| 💾 **数据持久化** | 本地 JSON 存储，重启不丢失，支持导出导入备份 |
 | 🛡️ **安全防护** | 密码错误指数级锁定、防时间篡改、可选超限自动销毁 |
-| 📌 **智能管理** | 置顶、去重、过期自动清理、复制次数限制 |
+| 📌 **智能管理** | 置顶、去重、过期自动清理、复制次数限制、类型过滤 |
+| 📦 **导出导入** | 加密备份（JIEEXP 格式），支持导入配置和记录 |
 
 ---
 
@@ -70,9 +71,11 @@
 ```bash
 # 1. 克隆仓库
 git clone https://github.com/nljie1103/JIE-Clipboard.git
+
+# 2. 进入目录
 cd JIE-Clipboard
 
-# 2. 发布为独立单文件 exe
+# 3. 发布为独立单文件 exe
 dotnet publish -c Release
 ```
 
@@ -111,33 +114,33 @@ JIE-Clipboard/
 ├── icon.ico / icon.png        # 应用图标资源
 │
 ├── Models/                    # 数据模型
-│   ├── AppConfig.cs           #   应用配置
-│   └── ClipboardRecord.cs     #   剪贴板记录（支持 6 种内容类型）
+│   ├── AppConfig.cs           #   应用配置（类型过滤、持久化加密、安全策略等）
+│   └── ClipboardRecord.cs     #   剪贴板记录（6 种内容类型 + 加密提示文字）
 │
 ├── Services/                  # 核心服务
-│   ├── ClipboardService.cs    #   剪贴板读写
-│   ├── EncryptionService.cs   #   AES-256-CBC 加密
-│   ├── FileService.cs         #   数据持久化（JSON）
+│   ├── ClipboardService.cs    #   剪贴板读写 + 内容预览
+│   ├── EncryptionService.cs   #   AES-256-CBC 加密（PBKDF2 100K 迭代）
+│   ├── FileService.cs         #   数据持久化（DPAPI 加密存储 + 文件/文件夹加密）
 │   ├── HotkeyService.cs       #   全局快捷键（Win32 API）
 │   ├── LogService.cs          #   日志记录
-│   └── ThemeService.cs        #   主题管理
+│   └── ThemeService.cs        #   主题管理（浅色/深色/跟随系统）
 │
 ├── Controls/                  # 自定义控件
 │   ├── NavigationListBox.cs   #   导航列表（GDI+ 自绘）
-│   ├── RecordListPanel.cs     #   记录列表（虚拟滚动）
+│   ├── RecordListPanel.cs     #   记录列表（虚拟滚动 + 加密缩略图）
 │   └── ToggleSwitch.cs        #   开关控件
 │
 ├── Dialogs/                   # 对话框
-│   ├── EditRecordDialog.cs    #   编辑记录
+│   ├── EditRecordDialog.cs    #   编辑记录（加密/解密、提示文字、安全设置）
 │   └── PasswordDialog.cs      #   密码输入
 │
 ├── Pages/                     # 设置页面
-│   ├── AllRecordsPage.cs      #   全部记录
-│   ├── GeneralSettingsPage.cs #   通用设置
+│   ├── AllRecordsPage.cs      #   全部记录（搜索、筛选、批量操作）
+│   ├── GeneralSettingsPage.cs #   通用设置（类型过滤、扩展名、持久化加密）
 │   ├── HotkeyPage.cs          #   快捷键设置
-│   ├── AppearancePage.cs      #   外观主题
-│   ├── SecurityPage.cs        #   安全防护
-│   ├── ExportImportPage.cs    #   导出导入
+│   ├── AppearancePage.cs      #   外观主题（主题色、字体、深浅模式）
+│   ├── SecurityPage.cs        #   安全防护（锁定策略、自动销毁）
+│   ├── ExportImportPage.cs    #   导出导入（加密备份 JIEEXP 格式）
 │   └── AboutPage.cs           #   关于
 │
 └── Native/
@@ -153,9 +156,10 @@ JIE-Clipboard/
 | .NET 8.0 LTS | 运行时框架 |
 | WinForms | UI 框架 |
 | C# 12 | 编程语言 |
-| System.Security.Cryptography | AES-256 加密 + PBKDF2 |
+| System.Security.Cryptography | AES-256 加密 + PBKDF2 + DPAPI |
 | Win32 API (P/Invoke) | 剪贴板监听、全局快捷键、输入模拟 |
 | System.Text.Json | 数据序列化 |
+| System.IO.Compression | 文件夹压缩存储 |
 
 ---
 
@@ -164,11 +168,12 @@ JIE-Clipboard/
 | 文件 | 路径 | 说明 |
 |:---|:---|:---|
 | config.json | `%AppData%\JIE剪切板\` | 应用配置 |
-| records.json | `%AppData%\JIE剪切板\`（可自定义） | 剪贴板记录 |
-| Images/ | `%AppData%\JIE剪切板\`（可自定义） | 图片文件 |
+| records.dat | `%AppData%\JIE剪切板\`（可自定义） | 剪贴板记录（DPAPI 加密） |
+| Images/ | `%AppData%\JIE剪切板\`（可自定义） | 图片文件（可选 DPAPI 加密 .enc） |
+| Files/ | `%AppData%\JIE剪切板\`（可自定义） | 持久化文件/文件夹（DPAPI 加密 .enc） |
 | Logs/ | `%AppData%\JIE剪切板\` | 日志（自动清理 7 天前） |
 
-> 可在「通用设置」中更改 records 和 images 的存储位置
+> 可在「通用设置」中更改 records、images 和 files 的存储位置
 
 ---
 

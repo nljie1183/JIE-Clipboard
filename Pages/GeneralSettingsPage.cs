@@ -19,8 +19,9 @@ public class GeneralSettingsPage : UserControl
                      _chkFileDrop = null!, _chkVideo = null!, _chkFolder = null!;
     private TextBox _txtIncludeExt = null!, _txtExcludeExt = null!;
 
-    // Record storage mode
-    private ToggleSwitch _swPersistentStorage = null!;
+    // Record storage mode (per-type)
+    private CheckBox _chkPersistImage = null!, _chkPersistFile = null!,
+                     _chkPersistVideo = null!, _chkPersistFolder = null!;
     private NumericUpDown _numMaxPersistSize = null!;
 
     public GeneralSettingsPage(MainForm mainForm)
@@ -208,24 +209,18 @@ public class GeneralSettingsPage : UserControl
         // Section: Record storage mode
         AddSectionHeader(layout, "记录方式", ref row);
 
-        // Persistent storage toggle
-        _swPersistentStorage = new ToggleSwitch();
-        _swPersistentStorage.CheckedChanged += (_, _) => { _numMaxPersistSize.Enabled = _swPersistentStorage.Checked; SaveSettings(); };
-        AddSettingRow(layout, "持久化加密存储", _swPersistentStorage, null, ref row);
-
         // Explanation label
         layout.RowCount = row + 1;
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         var persistExplain = new Label
         {
             Text = "当前存储方式说明：\n" +
-                   "• 纯文本/富文本：内容直接存储在本地加密数据库（records.dat），使用 Windows DPAPI 加密，仅当前用户可解密。\n" +
-                   "• 图片：保存为本地 PNG 文件，路径记录在加密数据库中。默认情况下图片文件本身未加密。\n" +
-                   "• 文件/视频/文件夹：仅记录路径到加密数据库，原始文件不受保护。\n\n" +
-                   "开启「持久化加密存储」后：\n" +
-                   "• 图片将被加密后存储，无法被直接浏览。\n" +
-                   "• 文件/视频将被复制到本地并加密存储，即使原文件被删除或移动，记录仍可使用。\n" +
-                   "• 文件夹类型仍仅记录路径（因文件夹可能包含大量文件）。",
+                   "• 纯文本/富文本：内容直接存储在本地加密数据库（records.dat），使用 Windows DPAPI 加密，仅当前用户可解密，无需额外设置。\n" +
+                   "• 图片/文件/视频/文件夹：默认仅加密记录路径，原始文件本身不加密。\n\n" +
+                   "以下可按类型单独开启「持久化加密存储」：\n" +
+                   "• 图片：图片文件将被 DPAPI 加密，无法被直接浏览。\n" +
+                   "• 文件/视频：文件将被复制到本地并加密，原文件删除后记录仍可使用。\n" +
+                   "• 文件夹：整个文件夹将被打包压缩并加密存储，原文件夹删除后记录仍可使用。",
             AutoSize = true,
             MaximumSize = new Size(DpiHelper.Scale(550), 0),
             ForeColor = ThemeService.SecondaryTextColor,
@@ -237,12 +232,50 @@ public class GeneralSettingsPage : UserControl
         layout.SetColumnSpan(persistExplain, 3);
         row++;
 
+        // Per-type persistent checkboxes
+        layout.RowCount = row + 1;
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, DpiHelper.Scale(40)));
+        var persistTypeLbl = new Label
+        {
+            Text = "加密以下类型",
+            AutoSize = true,
+            ForeColor = ThemeService.TextColor,
+            Anchor = AnchorStyles.Left,
+            Padding = new Padding(DpiHelper.Scale(10), DpiHelper.Scale(8), 0, 0)
+        };
+        layout.Controls.Add(persistTypeLbl, 0, row);
+
+        var persistTypeFlow = new FlowLayoutPanel
+        {
+            FlowDirection = FlowDirection.LeftToRight,
+            AutoSize = true,
+            WrapContents = true,
+            Anchor = AnchorStyles.Left,
+            Margin = new Padding(0, DpiHelper.Scale(4), 0, 0)
+        };
+        _chkPersistImage = new CheckBox { Text = "图片", AutoSize = true, ForeColor = ThemeService.TextColor, Margin = new Padding(0, 0, DpiHelper.Scale(12), 0) };
+        _chkPersistFile = new CheckBox { Text = "文件", AutoSize = true, ForeColor = ThemeService.TextColor, Margin = new Padding(0, 0, DpiHelper.Scale(12), 0) };
+        _chkPersistVideo = new CheckBox { Text = "视频", AutoSize = true, ForeColor = ThemeService.TextColor, Margin = new Padding(0, 0, DpiHelper.Scale(12), 0) };
+        _chkPersistFolder = new CheckBox { Text = "文件夹", AutoSize = true, ForeColor = ThemeService.TextColor };
+        foreach (var chk in new[] { _chkPersistImage, _chkPersistFile, _chkPersistVideo, _chkPersistFolder })
+        {
+            chk.CheckedChanged += (_, _) =>
+            {
+                _numMaxPersistSize.Enabled = _chkPersistImage.Checked || _chkPersistFile.Checked || _chkPersistVideo.Checked || _chkPersistFolder.Checked;
+                SaveSettings();
+            };
+            persistTypeFlow.Controls.Add(chk);
+        }
+        layout.Controls.Add(persistTypeFlow, 1, row);
+        layout.SetColumnSpan(persistTypeFlow, 2);
+        row++;
+
         // Warning
         layout.RowCount = row + 1;
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, DpiHelper.Scale(55)));
         var persistWarn = new Label
         {
-            Text = "⚠ 注意：开启此功能会大幅增加存储空间占用（文件将被完整复制并加密）。\n   建议将下方「存储位置」设置为非 C 盘的大容量磁盘。",
+            Text = "⚠ 注意：开启持久化加密会大幅增加存储空间占用（文件将被完整复制并加密）。\n   建议将下方「存储位置」设置为非 C 盘的大容量磁盘。",
             AutoSize = true,
             MaximumSize = new Size(DpiHelper.Scale(550), 0),
             ForeColor = Color.FromArgb(220, 53, 69),
@@ -271,14 +304,14 @@ public class GeneralSettingsPage : UserControl
         _numMaxPersistSize = new NumericUpDown
         {
             Minimum = 1,
-            Maximum = 500,
+            Maximum = 2048,
             Value = 50,
             Width = DpiHelper.Scale(80),
             Enabled = false
         };
         _numMaxPersistSize.ValueChanged += (_, _) => SaveSettings();
         persistSizePanel.Controls.Add(_numMaxPersistSize);
-        var mbLabel = new Label { Text = "MB（超过此大小的文件仅记录路径）", AutoSize = true, ForeColor = ThemeService.SecondaryTextColor, Font = new Font(ThemeService.GlobalFont.FontFamily, 8.5f), Margin = new Padding(DpiHelper.Scale(5), DpiHelper.Scale(4), 0, 0) };
+        var mbLabel = new Label { Text = "MB（超过此大小的文件/文件夹仅记录路径）", AutoSize = true, ForeColor = ThemeService.SecondaryTextColor, Font = new Font(ThemeService.GlobalFont.FontFamily, 8.5f), Margin = new Padding(DpiHelper.Scale(5), DpiHelper.Scale(4), 0, 0) };
         persistSizePanel.Controls.Add(mbLabel);
         layout.Controls.Add(persistSizePanel, 1, row);
         layout.SetColumnSpan(persistSizePanel, 2);
@@ -440,10 +473,13 @@ public class GeneralSettingsPage : UserControl
         _txtIncludeExt.Text = config.IncludeExtensions;
         _txtExcludeExt.Text = config.ExcludeExtensions;
 
-        // Record storage mode
-        _swPersistentStorage.Checked = config.PersistentBinaryStorage;
+        // Record storage mode (per-type)
+        _chkPersistImage.Checked = config.PersistImage;
+        _chkPersistFile.Checked = config.PersistFileDrop;
+        _chkPersistVideo.Checked = config.PersistVideo;
+        _chkPersistFolder.Checked = config.PersistFolder;
         _numMaxPersistSize.Value = Math.Max(_numMaxPersistSize.Minimum, Math.Min(_numMaxPersistSize.Maximum, config.MaxPersistFileSizeMB));
-        _numMaxPersistSize.Enabled = config.PersistentBinaryStorage;
+        _numMaxPersistSize.Enabled = config.PersistImage || config.PersistFileDrop || config.PersistVideo || config.PersistFolder;
     }
 
     private void SaveSettings()
@@ -479,8 +515,11 @@ public class GeneralSettingsPage : UserControl
             config.IncludeExtensions = _txtIncludeExt.Text.Trim();
             config.ExcludeExtensions = _txtExcludeExt.Text.Trim();
 
-            // Record storage mode
-            config.PersistentBinaryStorage = _swPersistentStorage.Checked;
+            // Record storage mode (per-type)
+            config.PersistImage = _chkPersistImage.Checked;
+            config.PersistFileDrop = _chkPersistFile.Checked;
+            config.PersistVideo = _chkPersistVideo.Checked;
+            config.PersistFolder = _chkPersistFolder.Checked;
             config.MaxPersistFileSizeMB = (int)_numMaxPersistSize.Value;
 
             FileService.SaveConfig(config);

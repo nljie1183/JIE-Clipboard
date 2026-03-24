@@ -17,7 +17,7 @@ public class EditRecordDialog : Form
     private CheckBox _chkExpire = null!, _chkEncrypt = null!, _chkUseGlobal = null!;
     private NumericUpDown _numMaxCopy = null!, _numMaxAttempts = null!, _numBaseLock = null!;
     private ToggleSwitch _swAutoDelete = null!;
-    private TextBox _txtPassword = null!, _txtPasswordConfirm = null!;
+    private TextBox _txtPassword = null!, _txtPasswordConfirm = null!, _txtEncryptedHint = null!;
     private Panel _encryptPanel = null!, _securityPanel = null!;
 
     public EditRecordDialog(ClipboardRecord record, AppConfig config,
@@ -36,7 +36,7 @@ public class EditRecordDialog : Form
     private void InitializeForm()
     {
         Text = "编辑记录";
-        Size = new Size(550, 620);
+        Size = new Size(550, 660);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
@@ -160,21 +160,34 @@ public class EditRecordDialog : Form
         };
         _encryptPanel.Controls.Add(_txtPasswordConfirm);
 
+        _encryptPanel.Controls.Add(CreateLabel("提示文字：", 0, 71));
+        _txtEncryptedHint = new TextBox
+        {
+            Location = new Point(100, 68),
+            Size = new Size(300, 25),
+            BorderStyle = BorderStyle.FixedSingle,
+            PlaceholderText = "可选，加密后显示的提示信息",
+            MaxLength = 100,
+            BackColor = ThemeService.IsDarkMode ? Color.FromArgb(50, 50, 50) : Color.White,
+            ForeColor = ThemeService.TextColor
+        };
+        _encryptPanel.Controls.Add(_txtEncryptedHint);
+
         // Use global security checkbox
         _chkUseGlobal = new CheckBox
         {
             Text = "使用全局安全设置",
             Checked = true,
-            Location = new Point(0, 65),
+            Location = new Point(0, 98),
             AutoSize = true,
             ForeColor = ThemeService.TextColor
         };
         _chkUseGlobal.CheckedChanged += (_, _) => _securityPanel.Visible = _chkEncrypt.Checked && !_chkUseGlobal.Checked;
         _encryptPanel.Controls.Add(_chkUseGlobal);
-        _encryptPanel.Size = new Size(500, 90);
+        _encryptPanel.Size = new Size(500, 123);
 
         Controls.Add(_encryptPanel);
-        y += 95;
+        y += 128;
 
         // Per-record security panel
         _securityPanel = new Panel
@@ -293,6 +306,7 @@ public class EditRecordDialog : Form
 
         // Encryption
         _chkEncrypt.Checked = _record.IsEncrypted;
+        _txtEncryptedHint.Text = _record.EncryptedHint ?? "";
         if (_record.IsEncrypted)
         {
             _txtPassword.Enabled = false;
@@ -349,6 +363,9 @@ public class EditRecordDialog : Form
 
             // Update copy count
             _record.MaxCopyCount = (int)_numMaxCopy.Value;
+
+            // Update encrypted hint
+            _record.EncryptedHint = string.IsNullOrWhiteSpace(_txtEncryptedHint.Text) ? null : _txtEncryptedHint.Text.Trim();
 
             // Handle encryption change
             if (_chkEncrypt.Checked && !_record.IsEncrypted)

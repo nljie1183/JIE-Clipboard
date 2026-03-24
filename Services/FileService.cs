@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -353,6 +354,74 @@ public static class FileService
         }
     }
 
+    /// <summary>Zip a folder, encrypt the zip with DPAPI, save to Files/ folder. Returns .enc path or empty on failure.</summary>
+    public static string SaveAndEncryptFolder(string folderPath, long maxBytes)
+    {
+        string? tempZip = null;
+        try
+        {
+            EnsureDirectories();
+            tempZip = Path.Combine(Path.GetTempPath(), $"jie_zip_{Guid.NewGuid():N}.zip");
+            ZipFile.CreateFromDirectory(folderPath, tempZip, CompressionLevel.Fastest, includeBaseDirectory: true);
+
+            var zipInfo = new FileInfo(tempZip);
+            if (zipInfo.Length > maxBytes)
+            {
+                LogService.Log($"Folder zip too large ({zipInfo.Length} bytes), skipping encryption");
+                return "";
+            }
+
+            var zipBytes = File.ReadAllBytes(tempZip);
+            var encrypted = ProtectedData.Protect(zipBytes, _storageSalt, DataProtectionScope.CurrentUser);
+
+            var fileName = $"{Guid.NewGuid():N}.zip.enc";
+            var destPath = Path.Combine(_filesFolder, fileName);
+            File.WriteAllBytes(destPath, encrypted);
+            return destPath;
+        }
+        catch (Exception ex)
+        {
+            LogService.Log("Failed to save and encrypt folder", ex);
+            return "";
+        }
+        finally
+        {
+            if (tempZip != null)
+                try { File.Delete(tempZip); } catch { }
+        }
+    }
+
+    /// <summary>Decrypt a .zip.enc file and extract to a temp folder. Caller should clean up.</summary>
+    public static string? DecryptFolderToTemp(string encPath)
+    {
+        string? tempZip = null;
+        try
+        {
+            var encrypted = File.ReadAllBytes(encPath);
+            var decrypted = ProtectedData.Unprotect(encrypted, _storageSalt, DataProtectionScope.CurrentUser);
+
+            tempZip = Path.Combine(Path.GetTempPath(), $"jie_zip_{Guid.NewGuid():N}.zip");
+            File.WriteAllBytes(tempZip, decrypted);
+
+            var tempFolder = Path.Combine(Path.GetTempPath(), $"jie_folder_{Guid.NewGuid():N}");
+            ZipFile.ExtractToDirectory(tempZip, tempFolder);
+
+            // The zip was created with includeBaseDirectory=true, so there's a single subfolder
+            var subdirs = Directory.GetDirectories(tempFolder);
+            return subdirs.Length == 1 ? subdirs[0] : tempFolder;
+        }
+        catch (Exception ex)
+        {
+            LogService.Log("Failed to decrypt folder to temp", ex);
+            return null;
+        }
+        finally
+        {
+            if (tempZip != null)
+                try { File.Delete(tempZip); } catch { }
+        }
+    }
+
     public static void DeleteRecordFiles(ClipboardRecord record)
     {
         try
@@ -365,7 +434,8 @@ public static class FileService
                 if (File.Exists(record.Content))
                     File.Delete(record.Content);
             }
-            else if (record.ContentType is ClipboardContentType.FileDrop or ClipboardContentType.Video)
+            else if (record.ContentType is ClipboardContentType.FileDrop or ClipboardContentType.Video
+                     or ClipboardContentType.Folder)
             {
                 // Delete encrypted local copies (.enc files in our Files folder)
                 var paths = record.Content.Split('\n', StringSplitOptions.RemoveEmptyEntries);

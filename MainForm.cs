@@ -399,9 +399,8 @@ public class MainForm : Form
 
             Records.Insert(0, record);
 
-            // Apply persistent encrypted storage for binary types if enabled
-            if (Config.PersistentBinaryStorage)
-                ApplyPersistentStorage(record);
+            // Apply persistent encrypted storage per-type
+            ApplyPersistentStorage(record);
 
             // Enforce max record count
             if (Config.MaxRecordCountEnabled && Records.Count > Config.MaxRecordCount)
@@ -776,10 +775,12 @@ public class MainForm : Form
     {
         try
         {
+            long maxBytes = Config.MaxPersistFileSizeMB * 1024L * 1024;
+
             switch (record.ContentType)
             {
                 case ClipboardContentType.Image:
-                    // Image is already saved as PNG by ClipboardService, encrypt it in-place
+                    if (!Config.PersistImage) return;
                     if (File.Exists(record.Content) && !record.Content.EndsWith(".enc", StringComparison.OrdinalIgnoreCase))
                     {
                         var encPath = FileService.EncryptExistingFile(record.Content);
@@ -792,42 +793,69 @@ public class MainForm : Form
                     }
                     break;
 
-                case ClipboardContentType.FileDrop:
                 case ClipboardContentType.Video:
-                    var paths = record.Content.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-                    var encPaths = new List<string>();
-                    long maxBytes = Config.MaxPersistFileSizeMB * 1024L * 1024;
-                    foreach (var path in paths)
+                    if (!Config.PersistVideo) return;
+                    EncryptFileDropPaths(record, maxBytes);
+                    break;
+
+                case ClipboardContentType.FileDrop:
+                    if (!Config.PersistFileDrop) return;
+                    EncryptFileDropPaths(record, maxBytes);
+                    break;
+
+                case ClipboardContentType.Folder:
+                    if (!Config.PersistFolder) return;
+                    var folderPaths = record.Content.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                    var encFolderPaths = new List<string>();
+                    foreach (var fp in folderPaths)
                     {
-                        if (File.Exists(path))
+                        if (Directory.Exists(fp))
                         {
-                            var fi = new FileInfo(path);
-                            if (fi.Length <= maxBytes)
-                            {
-                                var enc = FileService.SaveAndEncryptFile(path);
-                                encPaths.Add(!string.IsNullOrEmpty(enc) ? enc : path);
-                            }
-                            else
-                            {
-                                encPaths.Add(path); // Too large, just record path
-                            }
+                            var enc = FileService.SaveAndEncryptFolder(fp, maxBytes);
+                            encFolderPaths.Add(!string.IsNullOrEmpty(enc) ? enc : fp);
                         }
                         else
                         {
-                            encPaths.Add(path);
+                            encFolderPaths.Add(fp);
                         }
                     }
-                    record.Content = string.Join("\n", encPaths);
+                    record.Content = string.Join("\n", encFolderPaths);
                     record.ContentHash = EncryptionService.ComputeContentHash(record.Content);
                     break;
-
-                // Folders: just record path (too many files to copy)
             }
         }
         catch (Exception ex)
         {
             LogService.Log("Failed to apply persistent storage", ex);
         }
+    }
+
+    private void EncryptFileDropPaths(ClipboardRecord record, long maxBytes)
+    {
+        var paths = record.Content.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        var encPaths = new List<string>();
+        foreach (var path in paths)
+        {
+            if (File.Exists(path))
+            {
+                var fi = new FileInfo(path);
+                if (fi.Length <= maxBytes)
+                {
+                    var enc = FileService.SaveAndEncryptFile(path);
+                    encPaths.Add(!string.IsNullOrEmpty(enc) ? enc : path);
+                }
+                else
+                {
+                    encPaths.Add(path);
+                }
+            }
+            else
+            {
+                encPaths.Add(path);
+            }
+        }
+        record.Content = string.Join("\n", encPaths);
+        record.ContentHash = EncryptionService.ComputeContentHash(record.Content);
     }
 
     #endregion

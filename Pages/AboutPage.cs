@@ -36,7 +36,7 @@ public class AboutPage : UserControl
 
         var versionLabel = new Label
         {
-            Text = "版本 2.0.1.1",
+            Text = "版本 2.0.1.2",
             Font = new Font(ThemeService.GlobalFont.FontFamily, 11f),
             ForeColor = ThemeService.SecondaryTextColor,
             AutoSize = true,

@@ -98,7 +98,6 @@ public static class ClipboardService
                             return false;
                         case ClipboardContentType.FileDrop:
                         case ClipboardContentType.Video:
-                        case ClipboardContentType.Folder:
                             var paths = content.Split('\n', StringSplitOptions.RemoveEmptyEntries);
                             var actualPaths = new List<string>();
                             var tempFiles = new List<string>();
@@ -118,12 +117,44 @@ public static class ClipboardService
                             var collection = new StringCollection();
                             collection.AddRange(actualPaths.ToArray());
                             Clipboard.SetFileDropList(collection);
-                            // Schedule temp file cleanup after paste
                             if (tempFiles.Count > 0)
                                 Task.Delay(5000).ContinueWith(_ =>
                                 {
                                     foreach (var tf in tempFiles)
                                         try { File.Delete(tf); } catch { }
+                                });
+                            return true;
+                        case ClipboardContentType.Folder:
+                            var folderPaths = content.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                            var actualFolderPaths = new List<string>();
+                            var tempFolders = new List<string>();
+                            foreach (var p in folderPaths)
+                            {
+                                if (p.EndsWith(".enc", StringComparison.OrdinalIgnoreCase) && File.Exists(p))
+                                {
+                                    var temp = FileService.DecryptFolderToTemp(p);
+                                    if (temp != null)
+                                    {
+                                        actualFolderPaths.Add(temp);
+                                        // Clean up the parent temp wrapper
+                                        var parent = Path.GetDirectoryName(temp);
+                                        tempFolders.Add(parent != null && parent.Contains("jie_folder_") ? parent : temp);
+                                    }
+                                }
+                                else
+                                {
+                                    actualFolderPaths.Add(p);
+                                }
+                            }
+                            if (actualFolderPaths.Count == 0) return false;
+                            var folderCollection = new StringCollection();
+                            folderCollection.AddRange(actualFolderPaths.ToArray());
+                            Clipboard.SetFileDropList(folderCollection);
+                            if (tempFolders.Count > 0)
+                                Task.Delay(10000).ContinueWith(_ =>
+                                {
+                                    foreach (var tf in tempFolders)
+                                        try { Directory.Delete(tf, true); } catch { }
                                 });
                             return true;
                         default:
@@ -153,12 +184,13 @@ public static class ClipboardService
     {
         if (record.IsEncrypted)
         {
+            var hint = string.IsNullOrWhiteSpace(record.EncryptedHint) ? "" : $" {record.EncryptedHint}";
             if (record.LockUntil.HasValue && record.LockUntil.Value > DateTime.Now)
             {
                 var remaining = record.LockUntil.Value - DateTime.Now;
-                return $"[加密内容] [已锁定，剩余解禁时间{FormatTimeSpan(remaining)}]";
+                return $"[加密内容]{hint} [已锁定，剩余解禁时间{FormatTimeSpan(remaining)}]";
             }
-            return "[加密内容]";
+            return $"[加密内容]{hint}";
         }
 
         string preview = record.ContentType switch

@@ -43,8 +43,11 @@ public class AppConfig
     public string IncludeExtensions { get; set; } = "";
     public string ExcludeExtensions { get; set; } = "";
 
-    // Record storage mode
-    public bool PersistentBinaryStorage { get; set; } = false;
+    // Record storage mode (per-type persistent encrypted storage)
+    public bool PersistImage { get; set; } = false;
+    public bool PersistFileDrop { get; set; } = false;
+    public bool PersistVideo { get; set; } = false;
+    public bool PersistFolder { get; set; } = false;
     public int MaxPersistFileSizeMB { get; set; } = 50;
 
     // Security
