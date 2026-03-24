@@ -40,7 +40,7 @@ public class AboutPage : UserControl
 
         var versionLabel = new Label
         {
-            Text = "版本 3.0.0.4",
+            Text = "版本 3.0.0.5",
             Font = new Font(ThemeService.GlobalFont.FontFamily, 11f),
             ForeColor = ThemeService.SecondaryTextColor,
             AutoSize = true,
