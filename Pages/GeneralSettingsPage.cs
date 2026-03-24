@@ -68,14 +68,14 @@ public class GeneralSettingsPage : UserControl
 
         // 最大记录数
         _swMaxCount = new ToggleSwitch();
-                _numMaxCount = new NumericUpDown { Minimum = 1, Maximum = 100000, Value = 1000, Width = DpiHelper.Scale(120) };
+                _numMaxCount = new NumericUpDown { Minimum = 1, Maximum = 10000000, Value = 1000, Width = DpiHelper.Scale(120) };
         _swMaxCount.CheckedChanged += (_, _) => { _numMaxCount.Enabled = _swMaxCount.Checked; SaveSettings(); };
         AddSettingRow(layout, "限制最大记录数", _swMaxCount, _numMaxCount, ref row);
 
         // 单条最大大小限制
         _swMaxSize = new ToggleSwitch();
         var sizePanel = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, WrapContents = false };
-        _numMaxSize = new NumericUpDown { Minimum = 1, Maximum = 999999, Value = 100, Width = DpiHelper.Scale(100) };
+        _numMaxSize = new NumericUpDown { Minimum = 1, Maximum = 102400, Value = 100, Width = DpiHelper.Scale(100) };
         _cboSizeUnit = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = DpiHelper.Scale(60), Items = { "KB", "MB", "GB" } };
         _cboSizeUnit.SelectedItem = "MB";
         sizePanel.Controls.Add(_numMaxSize);
@@ -317,7 +317,7 @@ public class GeneralSettingsPage : UserControl
         _numMaxPersistSize = new NumericUpDown
         {
             Minimum = 1,
-            Maximum = 2048,
+            Maximum = 102400,
             Value = 50,
             Width = DpiHelper.Scale(80),
             Enabled = false
