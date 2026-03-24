@@ -11,29 +11,33 @@ internal static class Program
     [STAThread]
     static void Main()
     {
-        // Single instance check
-        _mutexHandle = Win32Api.CreateMutex(IntPtr.Zero, true, "JIE剪切板_SingleInstance_Mutex");
+        // Single instance check using GUID to prevent name collision/hijacking
+        _mutexHandle = Win32Api.CreateMutex(IntPtr.Zero, true, @"Local\JIE剪切板_{7A3F2E1B-9C4D-4E5F-A6B7-8D9E0F1A2B3C}");
         if (Marshal.GetLastWin32Error() == Win32Api.ERROR_ALREADY_EXISTS)
         {
             MessageBox.Show("JIE剪切板 已在运行中。", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
 
-        // Global exception handlers
-        Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
-        Application.ThreadException += Application_ThreadException;
-        AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
-
-        Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
-        ApplicationConfiguration.Initialize();
-        DpiHelper.Initialize();
-        Application.Run(new MainForm());
-
-        // Cleanup mutex
-        if (_mutexHandle != IntPtr.Zero)
+        try
         {
-            Win32Api.ReleaseMutex(_mutexHandle);
-            Win32Api.CloseHandle(_mutexHandle);
+            // Global exception handlers
+            Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+            Application.ThreadException += Application_ThreadException;
+            AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
+
+            Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
+            ApplicationConfiguration.Initialize();
+            DpiHelper.Initialize();
+            Application.Run(new MainForm());
+        }
+        finally
+        {
+            if (_mutexHandle != IntPtr.Zero)
+            {
+                Win32Api.ReleaseMutex(_mutexHandle);
+                Win32Api.CloseHandle(_mutexHandle);
+            }
         }
     }
 

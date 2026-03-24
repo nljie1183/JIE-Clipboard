@@ -15,6 +15,9 @@ public class AllRecordsPage : UserControl
 
     private readonly MainForm _mainForm;
     private string _searchText = "";
+    private System.Windows.Forms.Timer? _searchDebounceTimer;
+    private ContextMenuStrip? _recordContextMenu;
+    private ClipboardRecord? _contextMenuRecord;
 
     public AllRecordsPage(MainForm mainForm)
     {
@@ -44,12 +47,9 @@ public class AllRecordsPage : UserControl
             Font = new Font(ThemeService.GlobalFont.FontFamily, 10f),
             BorderStyle = BorderStyle.FixedSingle,
             BackColor = ThemeService.IsDarkMode ? Color.FromArgb(50, 50, 50) : Color.White,
-            ForeColor = ThemeService.TextColor
+            ForeColor = ThemeService.TextColor,
+            PlaceholderText = "搜索剪贴板记录"
         };
-        _searchBox.GotFocus += (_, _) => { if (_searchBox.Text == "搜索剪贴板记录") { _searchBox.Text = ""; _searchBox.ForeColor = ThemeService.TextColor; } };
-        _searchBox.LostFocus += (_, _) => { if (string.IsNullOrEmpty(_searchBox.Text)) { _searchBox.Text = "搜索剪贴板记录"; _searchBox.ForeColor = ThemeService.SecondaryTextColor; } };
-        _searchBox.Text = "搜索剪贴板记录";
-        _searchBox.ForeColor = ThemeService.SecondaryTextColor;
         _searchBox.TextChanged += SearchBox_TextChanged;
         searchPanel.Controls.Add(_searchBox);
 
@@ -72,6 +72,38 @@ public class AllRecordsPage : UserControl
         _recordList = new RecordListPanel { Dock = DockStyle.Fill };
         _recordList.RecordClicked += RecordList_RecordClicked;
         _recordList.RecordRightClicked += RecordList_RecordRightClicked;
+
+        // Search debounce timer
+        _searchDebounceTimer = new System.Windows.Forms.Timer { Interval = 300 };
+        _searchDebounceTimer.Tick += (_, _) => { _searchDebounceTimer.Stop(); RefreshRecords(); };
+
+        // Reusable context menu
+        _recordContextMenu = new ContextMenuStrip();
+        var menuEdit = new ToolStripMenuItem("编辑记录");
+        menuEdit.Click += (_, _) => { if (_contextMenuRecord != null) EditRecord(_contextMenuRecord); };
+        var menuDelete = new ToolStripMenuItem("删除本条");
+        menuDelete.Click += (_, _) =>
+        {
+            if (_contextMenuRecord != null && MessageBox.Show(this, "确定要删除这条记录吗？", "确认删除",
+                MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+            {
+                _mainForm.DeleteRecord(_contextMenuRecord);
+                RefreshRecords();
+            }
+        };
+        var menuPin = new ToolStripMenuItem("置顶");
+        menuPin.Click += (_, _) =>
+        {
+            if (_contextMenuRecord != null)
+            {
+                _contextMenuRecord.IsPinned = !_contextMenuRecord.IsPinned;
+                _mainForm.SaveData();
+                RefreshRecords();
+            }
+        };
+        var menuCopy = new ToolStripMenuItem("复制本条");
+        menuCopy.Click += (_, _) => { if (_contextMenuRecord != null) RecordList_RecordClicked(null, _contextMenuRecord); };
+        _recordContextMenu.Items.AddRange(new ToolStripItem[] { menuEdit, menuDelete, menuPin, menuCopy });
 
         Controls.Add(_recordList);
         Controls.Add(_buttonPanel);
@@ -116,7 +148,7 @@ public class AllRecordsPage : UserControl
 
     private List<ClipboardRecord> ApplySearch(List<ClipboardRecord> records)
     {
-        if (string.IsNullOrEmpty(_searchText) || _searchText == "搜索剪贴板记录")
+        if (string.IsNullOrEmpty(_searchText))
             return records.ToList();
 
         var keyword = _searchText.ToLower();
@@ -154,7 +186,8 @@ public class AllRecordsPage : UserControl
     private void SearchBox_TextChanged(object? sender, EventArgs e)
     {
         _searchText = _searchBox.Text;
-        RefreshRecords();
+        _searchDebounceTimer?.Stop();
+        _searchDebounceTimer?.Start();
     }
 
     private void RecordList_RecordClicked(object? sender, ClipboardRecord record)
@@ -288,40 +321,22 @@ public class AllRecordsPage : UserControl
 
     private void RecordList_RecordRightClicked(object? sender, (ClipboardRecord record, Point location) args)
     {
-        var (record, location) = args;
-        var menu = new ContextMenuStrip();
-
-        var menuEdit = new ToolStripMenuItem("编辑记录");
-        menuEdit.Click += (_, _) => EditRecord(record);
-
-        var menuDelete = new ToolStripMenuItem("删除本条");
-        menuDelete.Click += (_, _) =>
+        _contextMenuRecord = args.record;
+        // Update pin text
+        if (_recordContextMenu != null && _recordContextMenu.Items.Count > 2
+            && _recordContextMenu.Items[2] is ToolStripMenuItem pinItem)
         {
-            if (MessageBox.Show(this, "确定要删除这条记录吗？", "确认删除",
-                MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
-            {
-                _mainForm.DeleteRecord(record);
-                RefreshRecords();
-            }
-        };
-
-        var menuPin = new ToolStripMenuItem(record.IsPinned ? "取消置顶" : "置顶");
-        menuPin.Click += (_, _) =>
-        {
-            record.IsPinned = !record.IsPinned;
-            _mainForm.SaveData();
-            RefreshRecords();
-        };
-
-        var menuCopy = new ToolStripMenuItem("复制本条");
-        menuCopy.Click += (_, _) => RecordList_RecordClicked(sender, record);
-
-        menu.Items.AddRange(new ToolStripItem[] { menuEdit, menuDelete, menuPin, menuCopy });
-        menu.Show(_recordList, location);
+            pinItem.Text = args.record.IsPinned ? "取消置顶" : "置顶";
+        }
+        _recordContextMenu?.Show(_recordList, args.location);
     }
 
     private void EditRecord(ClipboardRecord record)
     {
+        string? decryptedContent = null;
+        ClipboardContentType? decryptedType = null;
+        string? password = null;
+
         if (record.IsEncrypted)
         {
             using var pwDialog = new PasswordDialog();
@@ -335,9 +350,19 @@ public class AllRecordsPage : UserControl
                 MessageBox.Show(this, "密码错误，无法编辑。", "密码错误", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
+
+            // Decrypt content for display in editor
+            password = pwDialog.Password;
+            var result = EncryptionService.DecryptRecord(record, password);
+            if (result.HasValue)
+            {
+                decryptedContent = result.Value.content;
+                decryptedType = result.Value.type;
+            }
         }
 
-        using var editDialog = new EditRecordDialog(record, _mainForm.Config);
+        using var editDialog = new EditRecordDialog(record, _mainForm.Config,
+            decryptedContent, decryptedType, password);
         editDialog.TopMost = true;
         if (editDialog.ShowDialog(this) == DialogResult.OK)
         {

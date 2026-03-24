@@ -7,13 +7,10 @@ namespace JIE剪切板.Services;
 
 public static class ClipboardService
 {
-    private static int _isSelfWriting = 0;
+    private static int _selfWriteCount = 0;
 
-    public static bool IsSelfWriting
-    {
-        get => Interlocked.CompareExchange(ref _isSelfWriting, 0, 0) == 1;
-        set => Interlocked.Exchange(ref _isSelfWriting, value ? 1 : 0);
-    }
+    public static bool IsSelfWriting =>
+        Interlocked.CompareExchange(ref _selfWriteCount, 0, 0) > 0;
 
     public static ClipboardRecord? ReadFromClipboard()
     {
@@ -54,7 +51,7 @@ public static class ClipboardService
     {
         try
         {
-            IsSelfWriting = true;
+            Interlocked.Increment(ref _selfWriteCount);
             var content = decryptedContent ?? record.Content;
             var type = record.ContentType;
 
@@ -73,18 +70,61 @@ public static class ClipboardService
                         case ClipboardContentType.Image:
                             if (File.Exists(content))
                             {
-                                using var img = Image.FromFile(content);
-                                Clipboard.SetImage(img);
-                                return true;
+                                if (content.EndsWith(".enc", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    // Decrypt encrypted image to temp, set to clipboard, clean up
+                                    var tempPath = FileService.DecryptFileToTemp(content);
+                                    if (tempPath != null)
+                                    {
+                                        try
+                                        {
+                                            using var img = Image.FromFile(tempPath);
+                                            Clipboard.SetImage(img);
+                                        }
+                                        finally
+                                        {
+                                            try { File.Delete(tempPath); } catch { }
+                                        }
+                                        return true;
+                                    }
+                                }
+                                else
+                                {
+                                    using var img = Image.FromFile(content);
+                                    Clipboard.SetImage(img);
+                                    return true;
+                                }
                             }
                             return false;
                         case ClipboardContentType.FileDrop:
                         case ClipboardContentType.Video:
                         case ClipboardContentType.Folder:
                             var paths = content.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                            var actualPaths = new List<string>();
+                            var tempFiles = new List<string>();
+                            foreach (var p in paths)
+                            {
+                                if (p.EndsWith(".enc", StringComparison.OrdinalIgnoreCase) && File.Exists(p))
+                                {
+                                    var temp = FileService.DecryptFileToTemp(p);
+                                    if (temp != null) { actualPaths.Add(temp); tempFiles.Add(temp); }
+                                }
+                                else
+                                {
+                                    actualPaths.Add(p);
+                                }
+                            }
+                            if (actualPaths.Count == 0) return false;
                             var collection = new StringCollection();
-                            collection.AddRange(paths);
+                            collection.AddRange(actualPaths.ToArray());
                             Clipboard.SetFileDropList(collection);
+                            // Schedule temp file cleanup after paste
+                            if (tempFiles.Count > 0)
+                                Task.Delay(5000).ContinueWith(_ =>
+                                {
+                                    foreach (var tf in tempFiles)
+                                        try { File.Delete(tf); } catch { }
+                                });
                             return true;
                         default:
                             Clipboard.SetText(content);
@@ -105,7 +145,7 @@ public static class ClipboardService
         }
         finally
         {
-            Task.Delay(200).ContinueWith(_ => IsSelfWriting = false);
+            Task.Delay(200).ContinueWith(_ => Interlocked.Decrement(ref _selfWriteCount));
         }
     }
 
@@ -219,17 +259,27 @@ public static class ClipboardService
         if (paths.Count == 1)
         {
             var path = paths[0];
-            if (Directory.Exists(path)) return ClipboardContentType.Folder;
+            if (SafeDirectoryExists(path)) return ClipboardContentType.Folder;
             if (ClipboardRecord.IsVideoFile(path)) return ClipboardContentType.Video;
         }
         else
         {
-            bool allDirs = paths.All(Directory.Exists);
+            bool allDirs = paths.All(SafeDirectoryExists);
             if (allDirs) return ClipboardContentType.Folder;
             bool allVideos = paths.All(p => ClipboardRecord.IsVideoFile(p));
             if (allVideos) return ClipboardContentType.Video;
         }
         return ClipboardContentType.FileDrop;
+    }
+
+    private static bool SafeDirectoryExists(string path)
+    {
+        try
+        {
+            if (path.StartsWith(@"\\")) return false; // Skip network paths to avoid UI freeze
+            return Directory.Exists(path);
+        }
+        catch { return false; }
     }
 
     private static string GetFileNames(string content)

@@ -33,6 +33,9 @@ public class MainForm : Form
     private bool _isExiting;
     private bool _pasteMode;
     private System.Windows.Forms.Timer? _clipboardWatchdog;
+    private System.Windows.Forms.Timer? _saveThrottleTimer;
+    private bool _saveDataPending;
+    private DateTime _lastClipboardUpdate = DateTime.UtcNow;
 
     // Prevent window activation when in paste mode (like Win+V behavior)
     protected override bool ShowWithoutActivation => _pasteMode;
@@ -164,7 +167,8 @@ public class MainForm : Form
                     using var original = new Bitmap(pngStream);
                     using var resized = new Bitmap(original, 64, 64);
                     var hIcon = resized.GetHicon();
-                    _trayIcon.Icon = Icon.FromHandle(hIcon);
+                    _trayIcon.Icon = (Icon)Icon.FromHandle(hIcon).Clone();
+                    Win32Api.DestroyIcon(hIcon);
                 }
             }
             else if (icoStream != null)
@@ -223,6 +227,10 @@ public class MainForm : Form
         _clipboardWatchdog.Tick += ClipboardWatchdog_Tick;
         _clipboardWatchdog.Start();
 
+        // Save throttle timer to batch rapid saves
+        _saveThrottleTimer = new System.Windows.Forms.Timer { Interval = 500 };
+        _saveThrottleTimer.Tick += (_, _) => { _saveThrottleTimer.Stop(); FlushSaveData(); };
+
         // Cleanup expired records
         CleanupExpiredRecords();
     }
@@ -237,6 +245,9 @@ public class MainForm : Form
         }
 
         // Cleanup
+        FlushSaveData();
+        _saveThrottleTimer?.Stop();
+        _saveThrottleTimer?.Dispose();
         _clipboardWatchdog?.Stop();
         _clipboardWatchdog?.Dispose();
         Win32Api.RemoveClipboardFormatListener(Handle);
@@ -253,11 +264,17 @@ public class MainForm : Form
     protected override void OnDeactivate(EventArgs e)
     {
         base.OnDeactivate(e);
-        // Don't auto-hide in paste mode (window isn't activated)
         if (_pasteMode) return;
         if (Config.HideOnLostFocus && Visible && !_isExiting)
         {
-            Hide();
+            BeginInvoke(() =>
+            {
+                if (!Visible || _isExiting) return;
+                // Don't hide if an owned dialog (edit/password) is active
+                var active = Form.ActiveForm;
+                if (active != null && active != this) return;
+                Hide();
+            });
         }
     }
 
@@ -340,11 +357,22 @@ public class MainForm : Form
     private void OnClipboardUpdate()
     {
         if (!_isMonitoring || ClipboardService.IsSelfWriting) return;
+        _lastClipboardUpdate = DateTime.UtcNow;
 
         try
         {
             var record = ClipboardService.ReadFromClipboard();
             if (record == null) return;
+
+            // Check record type filter
+            if (!IsTypeAllowed(record.ContentType)) return;
+
+            // Check extension filter for file-based types
+            if (record.ContentType is ClipboardContentType.FileDrop or ClipboardContentType.Video or ClipboardContentType.Folder)
+            {
+                var paths = record.Content.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                if (!AreExtensionsAllowed(paths)) return;
+            }
 
             // Check content size limit
             if (Config.MaxContentSizeEnabled && !string.IsNullOrEmpty(record.Content))
@@ -360,8 +388,9 @@ public class MainForm : Form
                     !r.IsEncrypted && r.ContentHash == record.ContentHash);
                 if (existing != null)
                 {
-                    // Move to top by updating time
+                    // Move to top by updating time, reset copy count so it's usable again
                     existing.CreateTime = DateTime.UtcNow;
+                    existing.CurrentCopyCount = 0;
                     SaveData();
                     RefreshCurrentPage();
                     return;
@@ -369,6 +398,10 @@ public class MainForm : Form
             }
 
             Records.Insert(0, record);
+
+            // Apply persistent encrypted storage for binary types if enabled
+            if (Config.PersistentBinaryStorage)
+                ApplyPersistentStorage(record);
 
             // Enforce max record count
             if (Config.MaxRecordCountEnabled && Records.Count > Config.MaxRecordCount)
@@ -397,17 +430,19 @@ public class MainForm : Form
 
     private void ClipboardWatchdog_Tick(object? sender, EventArgs e)
     {
-        // Re-register clipboard listener to handle Win11 silently dropping it
         try
         {
-            if (_isMonitoring && IsHandleCreated && !_isExiting)
+            // Only re-register if no clipboard update received for >60s (may indicate dropped listener)
+            if (_isMonitoring && IsHandleCreated && !_isExiting
+                && (DateTime.UtcNow - _lastClipboardUpdate).TotalSeconds > 60)
             {
                 Win32Api.RemoveClipboardFormatListener(Handle);
                 if (!Win32Api.AddClipboardFormatListener(Handle))
-                {
                     LogService.Log("Clipboard watchdog: failed to re-register listener");
-                }
             }
+
+            // Periodically cleanup expired records
+            CleanupExpiredRecords();
         }
         catch (Exception ex)
         {
@@ -439,7 +474,7 @@ public class MainForm : Form
         }
     }
 
-    public void HideAndPaste()
+    public async void HideAndPaste()
     {
         try
         {
@@ -451,16 +486,14 @@ public class MainForm : Form
 
             if (wasPasteMode)
             {
-                // Original window still has focus, just send Ctrl+V
-                Thread.Sleep(50);
+                await Task.Delay(50);
                 Win32Api.SendCtrlV();
             }
             else if (targetWindow != IntPtr.Zero)
             {
-                // Need to restore focus first
-                Thread.Sleep(50);
+                await Task.Delay(50);
                 Win32Api.SetForegroundWindow(targetWindow);
-                Thread.Sleep(100);
+                await Task.Delay(100);
                 Win32Api.SendCtrlV();
             }
         }
@@ -486,6 +519,15 @@ public class MainForm : Form
 
     public void SaveData()
     {
+        _saveDataPending = true;
+        if (_saveThrottleTimer != null && !_saveThrottleTimer.Enabled)
+            _saveThrottleTimer.Start();
+    }
+
+    private void FlushSaveData()
+    {
+        if (!_saveDataPending) return;
+        _saveDataPending = false;
         try
         {
             FileService.SaveRecords(Records);
@@ -616,7 +658,7 @@ public class MainForm : Form
             {
                 if (_pages[i] != null)
                 {
-                    _pages[i]!.Dispose();
+                    try { _pages[i]!.Dispose(); } catch { }
                     _pages[i] = null;
                 }
             }
@@ -688,6 +730,103 @@ public class MainForm : Form
         catch (Exception ex)
         {
             LogService.Log("Expired record cleanup failed", ex);
+        }
+    }
+
+    #endregion
+
+    #region Record Type Filtering
+
+    private bool IsTypeAllowed(ClipboardContentType type) => type switch
+    {
+        ClipboardContentType.PlainText => Config.RecordPlainText,
+        ClipboardContentType.RichText => Config.RecordRichText,
+        ClipboardContentType.Image => Config.RecordImage,
+        ClipboardContentType.FileDrop => Config.RecordFileDrop,
+        ClipboardContentType.Video => Config.RecordVideo,
+        ClipboardContentType.Folder => Config.RecordFolder,
+        _ => true
+    };
+
+    private bool AreExtensionsAllowed(string[] paths)
+    {
+        var include = ParseExtensions(Config.IncludeExtensions);
+        var exclude = ParseExtensions(Config.ExcludeExtensions);
+
+        if (include.Count > 0)
+            return paths.Any(p => include.Contains(Path.GetExtension(p).ToLowerInvariant()));
+        if (exclude.Count > 0)
+            return !paths.All(p => exclude.Contains(Path.GetExtension(p).ToLowerInvariant()));
+        return true;
+    }
+
+    private static HashSet<string> ParseExtensions(string ext)
+    {
+        if (string.IsNullOrWhiteSpace(ext)) return new();
+        return ext.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                  .Select(e => e.StartsWith('.') ? e.ToLowerInvariant() : "." + e.ToLowerInvariant())
+                  .ToHashSet();
+    }
+
+    #endregion
+
+    #region Persistent Encrypted Storage
+
+    private void ApplyPersistentStorage(ClipboardRecord record)
+    {
+        try
+        {
+            switch (record.ContentType)
+            {
+                case ClipboardContentType.Image:
+                    // Image is already saved as PNG by ClipboardService, encrypt it in-place
+                    if (File.Exists(record.Content) && !record.Content.EndsWith(".enc", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var encPath = FileService.EncryptExistingFile(record.Content);
+                        if (!string.IsNullOrEmpty(encPath))
+                        {
+                            try { File.Delete(record.Content); } catch { }
+                            record.Content = encPath;
+                            record.ContentHash = EncryptionService.ComputeContentHash(record.Content);
+                        }
+                    }
+                    break;
+
+                case ClipboardContentType.FileDrop:
+                case ClipboardContentType.Video:
+                    var paths = record.Content.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                    var encPaths = new List<string>();
+                    long maxBytes = Config.MaxPersistFileSizeMB * 1024L * 1024;
+                    foreach (var path in paths)
+                    {
+                        if (File.Exists(path))
+                        {
+                            var fi = new FileInfo(path);
+                            if (fi.Length <= maxBytes)
+                            {
+                                var enc = FileService.SaveAndEncryptFile(path);
+                                encPaths.Add(!string.IsNullOrEmpty(enc) ? enc : path);
+                            }
+                            else
+                            {
+                                encPaths.Add(path); // Too large, just record path
+                            }
+                        }
+                        else
+                        {
+                            encPaths.Add(path);
+                        }
+                    }
+                    record.Content = string.Join("\n", encPaths);
+                    record.ContentHash = EncryptionService.ComputeContentHash(record.Content);
+                    break;
+
+                // Folders: just record path (too many files to copy)
+            }
+        }
+        catch (Exception ex)
+        {
+            LogService.Log("Failed to apply persistent storage", ex);
         }
     }
 

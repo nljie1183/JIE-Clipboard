@@ -6,7 +6,8 @@ namespace JIE剪切板.Pages;
 public class ExportImportPage : UserControl
 {
     private readonly MainForm _mainForm;
-    private CheckBox _chkExportRecords = null!, _chkExportConfig = null!;
+    private CheckBox _chkExportRecords = null!, _chkExportConfig = null!, _chkExportEncrypt = null!;
+    private TextBox _txtExportPassword = null!;
     private Label _lblStatus = null!;
 
     public ExportImportPage(MainForm mainForm)
@@ -74,6 +75,28 @@ public class ExportImportPage : UserControl
             ForeColor = ThemeService.TextColor
         };
 
+        _chkExportEncrypt = new CheckBox
+        {
+            Text = "加密导出文件",
+            Checked = false,
+            AutoSize = true,
+            Location = DpiHelper.Scale(new Point(250, 30)),
+            ForeColor = ThemeService.TextColor
+        };
+        _chkExportEncrypt.CheckedChanged += (_, _) => _txtExportPassword.Enabled = _chkExportEncrypt.Checked;
+
+        _txtExportPassword = new TextBox
+        {
+            Location = DpiHelper.Scale(new Point(250, 58)),
+            Size = DpiHelper.Scale(new Size(180, 25)),
+            UseSystemPasswordChar = true,
+            Enabled = false,
+            BorderStyle = BorderStyle.FixedSingle,
+            PlaceholderText = "输入导出密码",
+            BackColor = ThemeService.IsDarkMode ? Color.FromArgb(50, 50, 50) : Color.White,
+            ForeColor = ThemeService.TextColor
+        };
+
         var exportNote = new Label
         {
             Text = "注意：加密记录将以密文形式导出，导入后仍需密码解密。\n图片文件不包含在导出中，仅导出路径引用。",
@@ -95,7 +118,7 @@ public class ExportImportPage : UserControl
         btnExport.FlatAppearance.BorderSize = 0;
         btnExport.Click += BtnExport_Click;
 
-        exportGroup.Controls.AddRange(new Control[] { _chkExportRecords, _chkExportConfig, exportNote, btnExport });
+        exportGroup.Controls.AddRange(new Control[] { _chkExportRecords, _chkExportConfig, _chkExportEncrypt, _txtExportPassword, exportNote, btnExport });
         layout.Controls.Add(exportGroup);
 
         // Import section
@@ -179,8 +202,18 @@ public class ExportImportPage : UserControl
 
             var records = _chkExportRecords.Checked ? _mainForm.Records : null;
             var config = _chkExportConfig.Checked ? _mainForm.Config : null;
+            string? exportPassword = null;
+            if (_chkExportEncrypt.Checked)
+            {
+                exportPassword = _txtExportPassword.Text;
+                if (string.IsNullOrEmpty(exportPassword) || exportPassword.Length < 4)
+                {
+                    SetStatus("加密密码至少4个字符", Color.Red);
+                    return;
+                }
+            }
 
-            var error = FileService.ExportRecords(records ?? new List<ClipboardRecord>(), config, dialog.FileName);
+            var error = FileService.ExportRecords(records ?? new List<ClipboardRecord>(), config, dialog.FileName, exportPassword);
             if (string.IsNullOrEmpty(error))
             {
                 int count = records?.Count ?? 0;
@@ -220,7 +253,7 @@ public class ExportImportPage : UserControl
                 if (confirm != DialogResult.Yes) return;
             }
 
-            var (records, config, error) = FileService.ImportRecords(dialog.FileName);
+            var (records, config, error) = FileService.ImportRecords(dialog.FileName, this);
             if (!string.IsNullOrEmpty(error))
             {
                 SetStatus(error, Color.Red);
@@ -252,10 +285,15 @@ public class ExportImportPage : UserControl
                 }
             }
 
-            if (config != null && (overwrite || records == null))
+            if (config != null)
             {
-                // Apply imported config
-                _mainForm.ApplyImportedConfig(config);
+                var importConfig = MessageBox.Show(this,
+                    "备份文件包含应用设置，是否同时导入？",
+                    "导入设置",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question);
+                if (importConfig == DialogResult.Yes)
+                    _mainForm.ApplyImportedConfig(config);
             }
 
             _mainForm.SaveData();

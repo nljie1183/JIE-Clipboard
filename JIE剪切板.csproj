@@ -9,8 +9,8 @@
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>JIE剪切板</AssemblyName>
     <RootNamespace>JIE剪切板</RootNamespace>
-    <AssemblyVersion>2.0.0.1</AssemblyVersion>
-    <FileVersion>2.0.0.1</FileVersion>
+    <AssemblyVersion>2.0.1.1</AssemblyVersion>
+    <FileVersion>2.0.1.1</FileVersion>
     <Product>JIE剪切板</Product>
     <Company>牛连杰</Company>
     <Copyright>Copyright © 2026 JIE剪切板</Copyright>
@@ -40,6 +40,10 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <Optimize>false</Optimize>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+  </ItemGroup>
 
   <ItemGroup>
     <Using Include="System" />

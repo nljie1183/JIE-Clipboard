@@ -28,7 +28,12 @@ public static class ThemeService
 
         if (!string.IsNullOrEmpty(config.ThemeFont))
         {
-            try { GlobalFont = new Font(config.ThemeFont, SystemFonts.DefaultFont.Size); }
+            try
+            {
+                var oldFont = GlobalFont;
+                GlobalFont = new Font(config.ThemeFont, SystemFonts.DefaultFont.Size);
+                if (oldFont != SystemFonts.DefaultFont) oldFont?.Dispose();
+            }
             catch { GlobalFont = SystemFonts.DefaultFont; }
         }
 
@@ -52,9 +57,11 @@ public static class ThemeService
     {
         try
         {
+            var oldFont = GlobalFont;
             GlobalFont = string.IsNullOrEmpty(fontName)
                 ? SystemFonts.DefaultFont
                 : new Font(fontName, SystemFonts.DefaultFont.Size);
+            if (oldFont != SystemFonts.DefaultFont) oldFont?.Dispose();
         }
         catch { GlobalFont = SystemFonts.DefaultFont; }
         ThemeChanged?.Invoke();

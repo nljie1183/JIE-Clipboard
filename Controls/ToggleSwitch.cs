@@ -12,7 +12,7 @@ public class ToggleSwitch : Control
     public bool Checked
     {
         get => _checked;
-        set { _checked = value; Invalidate(); CheckedChanged?.Invoke(this, EventArgs.Empty); }
+        set { if (_checked == value) return; _checked = value; Invalidate(); CheckedChanged?.Invoke(this, EventArgs.Empty); }
     }
 
     public event EventHandler? CheckedChanged;

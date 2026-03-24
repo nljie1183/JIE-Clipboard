@@ -79,6 +79,10 @@ public static class Win32Api
     public const int MA_NOACTIVATE = 3;
     public const int MA_NOACTIVATEANDEAT = 4;
 
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool DestroyIcon(IntPtr handle);
+
     #endregion
 
     #region SendInput API

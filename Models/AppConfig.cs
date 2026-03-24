@@ -33,6 +33,20 @@ public class AppConfig
     public int ListRowHeight { get; set; } = 60;
     public int ThumbnailSize { get; set; } = 48;
 
+    // Record type filtering
+    public bool RecordPlainText { get; set; } = true;
+    public bool RecordRichText { get; set; } = true;
+    public bool RecordImage { get; set; } = true;
+    public bool RecordFileDrop { get; set; } = true;
+    public bool RecordVideo { get; set; } = true;
+    public bool RecordFolder { get; set; } = true;
+    public string IncludeExtensions { get; set; } = "";
+    public string ExcludeExtensions { get; set; } = "";
+
+    // Record storage mode
+    public bool PersistentBinaryStorage { get; set; } = false;
+    public int MaxPersistFileSizeMB { get; set; } = 50;
+
     // Security
     public int DefaultMaxPasswordAttempts { get; set; } = 3;
     public int DefaultBaseLockMinutes { get; set; } = 60;

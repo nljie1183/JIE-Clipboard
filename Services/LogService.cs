@@ -31,17 +31,25 @@ public static class LogService
             {
                 var logFile = Path.Combine(_logFolder, $"log_{DateTime.Now:yyyyMMdd}.txt");
                 var sb = new StringBuilder();
-                sb.AppendLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {message}");
+                sb.AppendLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {SanitizeLogMessage(message)}");
                 if (ex != null)
                 {
                     sb.AppendLine($"  Type: {ex.GetType().FullName}");
-                    sb.AppendLine($"  Message: {ex.Message}");
+                    sb.AppendLine($"  Message: {SanitizeLogMessage(ex.Message)}");
                     sb.AppendLine($"  Stack: {ex.StackTrace}");
                 }
                 File.AppendAllText(logFile, sb.ToString());
             }
         }
         catch { /* Cannot fail during logging */ }
+    }
+
+    private static string SanitizeLogMessage(string message)
+    {
+        var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (!string.IsNullOrEmpty(userProfile))
+            message = message.Replace(userProfile, "%USERPROFILE%");
+        return message;
     }
 
     private static void CleanOldLogs()

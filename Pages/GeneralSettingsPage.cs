@@ -14,6 +14,15 @@ public class GeneralSettingsPage : UserControl
     private ComboBox _cboSizeUnit = null!;
     private Label _dataPathLabel = null!;
 
+    // Record type filtering
+    private CheckBox _chkPlainText = null!, _chkRichText = null!, _chkImage = null!,
+                     _chkFileDrop = null!, _chkVideo = null!, _chkFolder = null!;
+    private TextBox _txtIncludeExt = null!, _txtExcludeExt = null!;
+
+    // Record storage mode
+    private ToggleSwitch _swPersistentStorage = null!;
+    private NumericUpDown _numMaxPersistSize = null!;
+
     public GeneralSettingsPage(MainForm mainForm)
     {
         _mainForm = mainForm;
@@ -82,6 +91,198 @@ public class GeneralSettingsPage : UserControl
         _swHideOnLostFocus = new ToggleSwitch();
         _swHideOnLostFocus.CheckedChanged += (_, _) => SaveSettings();
         AddSettingRow(layout, "失焦自动隐藏", _swHideOnLostFocus, new Label { Text = "窗口失去焦点时自动隐藏到托盘", AutoSize = true, ForeColor = ThemeService.SecondaryTextColor }, ref row);
+
+        // Section: Record types
+        AddSectionHeader(layout, "记录类型", ref row);
+
+        // Type checkboxes
+        layout.RowCount = row + 1;
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, DpiHelper.Scale(40)));
+        var typeLbl = new Label
+        {
+            Text = "记录以下类型",
+            AutoSize = true,
+            ForeColor = ThemeService.TextColor,
+            Anchor = AnchorStyles.Left,
+            Padding = new Padding(DpiHelper.Scale(10), DpiHelper.Scale(8), 0, 0)
+        };
+        layout.Controls.Add(typeLbl, 0, row);
+
+        var typeFlow = new FlowLayoutPanel
+        {
+            FlowDirection = FlowDirection.LeftToRight,
+            AutoSize = true,
+            WrapContents = true,
+            Anchor = AnchorStyles.Left,
+            Margin = new Padding(0, DpiHelper.Scale(4), 0, 0)
+        };
+        _chkPlainText = new CheckBox { Text = "纯文本", AutoSize = true, ForeColor = ThemeService.TextColor, Margin = new Padding(0, 0, DpiHelper.Scale(12), 0) };
+        _chkRichText = new CheckBox { Text = "富文本", AutoSize = true, ForeColor = ThemeService.TextColor, Margin = new Padding(0, 0, DpiHelper.Scale(12), 0) };
+        _chkImage = new CheckBox { Text = "图片", AutoSize = true, ForeColor = ThemeService.TextColor, Margin = new Padding(0, 0, DpiHelper.Scale(12), 0) };
+        _chkFileDrop = new CheckBox { Text = "文件", AutoSize = true, ForeColor = ThemeService.TextColor, Margin = new Padding(0, 0, DpiHelper.Scale(12), 0) };
+        _chkVideo = new CheckBox { Text = "视频", AutoSize = true, ForeColor = ThemeService.TextColor, Margin = new Padding(0, 0, DpiHelper.Scale(12), 0) };
+        _chkFolder = new CheckBox { Text = "文件夹", AutoSize = true, ForeColor = ThemeService.TextColor };
+        foreach (var chk in new[] { _chkPlainText, _chkRichText, _chkImage, _chkFileDrop, _chkVideo, _chkFolder })
+        {
+            chk.CheckedChanged += (_, _) => SaveSettings();
+            typeFlow.Controls.Add(chk);
+        }
+        layout.Controls.Add(typeFlow, 1, row);
+        layout.SetColumnSpan(typeFlow, 2);
+        row++;
+
+        // Include extensions
+        layout.RowCount = row + 1;
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, DpiHelper.Scale(40)));
+        var inclLbl = new Label
+        {
+            Text = "仅记录后缀",
+            AutoSize = true,
+            ForeColor = ThemeService.TextColor,
+            Anchor = AnchorStyles.Left,
+            Padding = new Padding(DpiHelper.Scale(10), DpiHelper.Scale(8), 0, 0)
+        };
+        layout.Controls.Add(inclLbl, 0, row);
+
+        var inclPanel = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, WrapContents = false, Anchor = AnchorStyles.Left, Margin = new Padding(0, DpiHelper.Scale(5), 0, 0) };
+        _txtIncludeExt = new TextBox
+        {
+            Width = DpiHelper.Scale(250),
+            BorderStyle = BorderStyle.FixedSingle,
+            BackColor = ThemeService.IsDarkMode ? Color.FromArgb(50, 50, 50) : Color.White,
+            ForeColor = ThemeService.TextColor,
+            PlaceholderText = "留空=全部，如 .doc,.pdf,.xlsx"
+        };
+        _txtIncludeExt.Leave += (_, _) => SaveSettings();
+        inclPanel.Controls.Add(_txtIncludeExt);
+        var inclTip = new Label
+        {
+            Text = "多个后缀用逗号分隔，设置后仅记录匹配的文件",
+            AutoSize = true,
+            ForeColor = ThemeService.SecondaryTextColor,
+            Font = new Font(ThemeService.GlobalFont.FontFamily, 8f),
+            Margin = new Padding(DpiHelper.Scale(8), DpiHelper.Scale(5), 0, 0)
+        };
+        inclPanel.Controls.Add(inclTip);
+        layout.Controls.Add(inclPanel, 1, row);
+        layout.SetColumnSpan(inclPanel, 2);
+        row++;
+
+        // Exclude extensions
+        layout.RowCount = row + 1;
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, DpiHelper.Scale(40)));
+        var exclLbl = new Label
+        {
+            Text = "不记录后缀",
+            AutoSize = true,
+            ForeColor = ThemeService.TextColor,
+            Anchor = AnchorStyles.Left,
+            Padding = new Padding(DpiHelper.Scale(10), DpiHelper.Scale(8), 0, 0)
+        };
+        layout.Controls.Add(exclLbl, 0, row);
+
+        var exclPanel = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, WrapContents = false, Anchor = AnchorStyles.Left, Margin = new Padding(0, DpiHelper.Scale(5), 0, 0) };
+        _txtExcludeExt = new TextBox
+        {
+            Width = DpiHelper.Scale(250),
+            BorderStyle = BorderStyle.FixedSingle,
+            BackColor = ThemeService.IsDarkMode ? Color.FromArgb(50, 50, 50) : Color.White,
+            ForeColor = ThemeService.TextColor,
+            PlaceholderText = "如 .tmp,.log,.bak"
+        };
+        _txtExcludeExt.Leave += (_, _) => SaveSettings();
+        exclPanel.Controls.Add(_txtExcludeExt);
+        var exclTip = new Label
+        {
+            Text = "匹配的文件将被忽略不记录",
+            AutoSize = true,
+            ForeColor = ThemeService.SecondaryTextColor,
+            Font = new Font(ThemeService.GlobalFont.FontFamily, 8f),
+            Margin = new Padding(DpiHelper.Scale(8), DpiHelper.Scale(5), 0, 0)
+        };
+        exclPanel.Controls.Add(exclTip);
+        layout.Controls.Add(exclPanel, 1, row);
+        layout.SetColumnSpan(exclPanel, 2);
+        row++;
+
+        // Section: Record storage mode
+        AddSectionHeader(layout, "记录方式", ref row);
+
+        // Persistent storage toggle
+        _swPersistentStorage = new ToggleSwitch();
+        _swPersistentStorage.CheckedChanged += (_, _) => { _numMaxPersistSize.Enabled = _swPersistentStorage.Checked; SaveSettings(); };
+        AddSettingRow(layout, "持久化加密存储", _swPersistentStorage, null, ref row);
+
+        // Explanation label
+        layout.RowCount = row + 1;
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        var persistExplain = new Label
+        {
+            Text = "当前存储方式说明：\n" +
+                   "• 纯文本/富文本：内容直接存储在本地加密数据库（records.dat），使用 Windows DPAPI 加密，仅当前用户可解密。\n" +
+                   "• 图片：保存为本地 PNG 文件，路径记录在加密数据库中。默认情况下图片文件本身未加密。\n" +
+                   "• 文件/视频/文件夹：仅记录路径到加密数据库，原始文件不受保护。\n\n" +
+                   "开启「持久化加密存储」后：\n" +
+                   "• 图片将被加密后存储，无法被直接浏览。\n" +
+                   "• 文件/视频将被复制到本地并加密存储，即使原文件被删除或移动，记录仍可使用。\n" +
+                   "• 文件夹类型仍仅记录路径（因文件夹可能包含大量文件）。",
+            AutoSize = true,
+            MaximumSize = new Size(DpiHelper.Scale(550), 0),
+            ForeColor = ThemeService.SecondaryTextColor,
+            Font = new Font(ThemeService.GlobalFont.FontFamily, 8.5f),
+            Anchor = AnchorStyles.Left,
+            Padding = new Padding(DpiHelper.Scale(10), 0, 0, 0)
+        };
+        layout.Controls.Add(persistExplain, 0, row);
+        layout.SetColumnSpan(persistExplain, 3);
+        row++;
+
+        // Warning
+        layout.RowCount = row + 1;
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, DpiHelper.Scale(55)));
+        var persistWarn = new Label
+        {
+            Text = "⚠ 注意：开启此功能会大幅增加存储空间占用（文件将被完整复制并加密）。\n   建议将下方「存储位置」设置为非 C 盘的大容量磁盘。",
+            AutoSize = true,
+            MaximumSize = new Size(DpiHelper.Scale(550), 0),
+            ForeColor = Color.FromArgb(220, 53, 69),
+            Font = new Font(ThemeService.GlobalFont.FontFamily, 8.5f),
+            Anchor = AnchorStyles.Left,
+            Padding = new Padding(DpiHelper.Scale(10), 0, 0, 0)
+        };
+        layout.Controls.Add(persistWarn, 0, row);
+        layout.SetColumnSpan(persistWarn, 3);
+        row++;
+
+        // Max persist file size
+        layout.RowCount = row + 1;
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, DpiHelper.Scale(40)));
+        var persistSizeLbl = new Label
+        {
+            Text = "最大持久化文件",
+            AutoSize = true,
+            ForeColor = ThemeService.TextColor,
+            Anchor = AnchorStyles.Left,
+            Padding = new Padding(DpiHelper.Scale(10), DpiHelper.Scale(8), 0, 0)
+        };
+        layout.Controls.Add(persistSizeLbl, 0, row);
+
+        var persistSizePanel = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, WrapContents = false, Anchor = AnchorStyles.Left, Margin = new Padding(0, DpiHelper.Scale(5), 0, 0) };
+        _numMaxPersistSize = new NumericUpDown
+        {
+            Minimum = 1,
+            Maximum = 500,
+            Value = 50,
+            Width = DpiHelper.Scale(80),
+            Enabled = false
+        };
+        _numMaxPersistSize.ValueChanged += (_, _) => SaveSettings();
+        persistSizePanel.Controls.Add(_numMaxPersistSize);
+        var mbLabel = new Label { Text = "MB（超过此大小的文件仅记录路径）", AutoSize = true, ForeColor = ThemeService.SecondaryTextColor, Font = new Font(ThemeService.GlobalFont.FontFamily, 8.5f), Margin = new Padding(DpiHelper.Scale(5), DpiHelper.Scale(4), 0, 0) };
+        persistSizePanel.Controls.Add(mbLabel);
+        layout.Controls.Add(persistSizePanel, 1, row);
+        layout.SetColumnSpan(persistSizePanel, 2);
+        row++;
 
         // Section: Data storage
         AddSectionHeader(layout, "数据存储", ref row);
@@ -228,6 +429,21 @@ public class GeneralSettingsPage : UserControl
         _swAutoStart.Checked = config.AutoStartOnBoot;
         _swAutoMonitor.Checked = config.AutoStartMonitoring;
         _swHideOnLostFocus.Checked = config.HideOnLostFocus;
+
+        // Record type filtering
+        _chkPlainText.Checked = config.RecordPlainText;
+        _chkRichText.Checked = config.RecordRichText;
+        _chkImage.Checked = config.RecordImage;
+        _chkFileDrop.Checked = config.RecordFileDrop;
+        _chkVideo.Checked = config.RecordVideo;
+        _chkFolder.Checked = config.RecordFolder;
+        _txtIncludeExt.Text = config.IncludeExtensions;
+        _txtExcludeExt.Text = config.ExcludeExtensions;
+
+        // Record storage mode
+        _swPersistentStorage.Checked = config.PersistentBinaryStorage;
+        _numMaxPersistSize.Value = Math.Max(_numMaxPersistSize.Minimum, Math.Min(_numMaxPersistSize.Maximum, config.MaxPersistFileSizeMB));
+        _numMaxPersistSize.Enabled = config.PersistentBinaryStorage;
     }
 
     private void SaveSettings()
@@ -252,6 +468,20 @@ public class GeneralSettingsPage : UserControl
             config.AutoStartOnBoot = _swAutoStart.Checked;
             config.AutoStartMonitoring = _swAutoMonitor.Checked;
             config.HideOnLostFocus = _swHideOnLostFocus.Checked;
+
+            // Record type filtering
+            config.RecordPlainText = _chkPlainText.Checked;
+            config.RecordRichText = _chkRichText.Checked;
+            config.RecordImage = _chkImage.Checked;
+            config.RecordFileDrop = _chkFileDrop.Checked;
+            config.RecordVideo = _chkVideo.Checked;
+            config.RecordFolder = _chkFolder.Checked;
+            config.IncludeExtensions = _txtIncludeExt.Text.Trim();
+            config.ExcludeExtensions = _txtExcludeExt.Text.Trim();
+
+            // Record storage mode
+            config.PersistentBinaryStorage = _swPersistentStorage.Checked;
+            config.MaxPersistFileSizeMB = (int)_numMaxPersistSize.Value;
 
             FileService.SaveConfig(config);
         }

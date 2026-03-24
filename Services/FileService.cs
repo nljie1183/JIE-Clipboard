@@ -12,9 +12,9 @@ public static class FileService
     private static string _dataFolder;
     private static string _recordsFile;
     private static string _imagesFolder;
+    private static string _filesFolder;
 
-    // Data-at-rest encryption key derived from machine identity
-    private static readonly byte[] _storageKey;
+    // Data-at-rest encryption salt for DPAPI additional entropy
     private static readonly byte[] _storageSalt = System.Text.Encoding.UTF8.GetBytes("JIE剪切板_Storage_v2");
 
     private static readonly JsonSerializerOptions _jsonOptions = new()
@@ -35,12 +35,7 @@ public static class FileService
         _dataFolder = _configFolder;
         _recordsFile = Path.Combine(_dataFolder, "records.dat");
         _imagesFolder = Path.Combine(_dataFolder, "Images");
-
-        // Derive storage key from machine + user identity
-        var identity = $"{Environment.MachineName}|{Environment.UserName}|JIE剪切板_SecureStorage";
-        var identityBytes = System.Text.Encoding.UTF8.GetBytes(identity);
-        using var pbkdf2 = new Rfc2898DeriveBytes(identityBytes, _storageSalt, 50000, HashAlgorithmName.SHA256);
-        _storageKey = pbkdf2.GetBytes(32);
+        _filesFolder = Path.Combine(_dataFolder, "Files");
     }
 
     public static void SetCustomDataFolder(string? folder)
@@ -48,6 +43,7 @@ public static class FileService
         _dataFolder = string.IsNullOrEmpty(folder) ? _configFolder : folder;
         _recordsFile = Path.Combine(_dataFolder, "records.dat");
         _imagesFolder = Path.Combine(_dataFolder, "Images");
+        _filesFolder = Path.Combine(_dataFolder, "Files");
         EnsureDirectories();
     }
 
@@ -106,6 +102,7 @@ public static class FileService
             if (!Directory.Exists(_configFolder)) Directory.CreateDirectory(_configFolder);
             if (!Directory.Exists(_dataFolder)) Directory.CreateDirectory(_dataFolder);
             if (!Directory.Exists(_imagesFolder)) Directory.CreateDirectory(_imagesFolder);
+            if (!Directory.Exists(_filesFolder)) Directory.CreateDirectory(_filesFolder);
             return true;
         }
         catch (Exception ex)
@@ -137,7 +134,9 @@ public static class FileService
         {
             EnsureDirectories();
             var json = JsonSerializer.Serialize(config, _jsonOptions);
-            File.WriteAllText(_configFile, json);
+            var tempFile = _configFile + ".tmp";
+            File.WriteAllText(tempFile, json);
+            File.Move(tempFile, _configFile, overwrite: true);
             return true;
         }
         catch (Exception ex)
@@ -191,7 +190,9 @@ public static class FileService
             EnsureDirectories();
             var json = JsonSerializer.Serialize(records, _jsonOptions);
             var encryptedBytes = EncryptStorage(json);
-            File.WriteAllBytes(_recordsFile, encryptedBytes);
+            var tempFile = _recordsFile + ".tmp";
+            File.WriteAllBytes(tempFile, encryptedBytes);
+            File.Move(tempFile, _recordsFile, overwrite: true);
             return true;
         }
         catch (Exception ex)
@@ -203,30 +204,35 @@ public static class FileService
 
     private static byte[] EncryptStorage(string plainText)
     {
-        var iv = RandomNumberGenerator.GetBytes(16);
-        using var aes = Aes.Create();
-        aes.KeySize = 256;
-        aes.Mode = CipherMode.CBC;
-        aes.Padding = PaddingMode.PKCS7;
-        aes.Key = _storageKey;
-        aes.IV = iv;
-
         var plainBytes = System.Text.Encoding.UTF8.GetBytes(plainText);
-        using var encryptor = aes.CreateEncryptor();
-        var encrypted = encryptor.TransformFinalBlock(plainBytes, 0, plainBytes.Length);
-
-        // Format: [IV 16 bytes][encrypted data]
-        var result = new byte[16 + encrypted.Length];
-        Buffer.BlockCopy(iv, 0, result, 0, 16);
-        Buffer.BlockCopy(encrypted, 0, result, 16, encrypted.Length);
-        return result;
+        return ProtectedData.Protect(plainBytes, _storageSalt, DataProtectionScope.CurrentUser);
     }
 
     private static string? DecryptStorage(byte[] data)
     {
-        if (data.Length < 17) return null;
+        // Try DPAPI first (new format)
         try
         {
+            var plainBytes = ProtectedData.Unprotect(data, _storageSalt, DataProtectionScope.CurrentUser);
+            return System.Text.Encoding.UTF8.GetString(plainBytes);
+        }
+        catch { }
+
+        // Fall back to legacy AES format for migration
+        return DecryptStorageLegacy(data);
+    }
+
+    private static string? DecryptStorageLegacy(byte[] data)
+    {
+        if (data.Length < 17) return null;
+        byte[]? legacyKey = null;
+        try
+        {
+            var identity = $"{Environment.MachineName}|{Environment.UserName}|JIE剪切板_SecureStorage";
+            var identityBytes = System.Text.Encoding.UTF8.GetBytes(identity);
+            using var pbkdf2 = new Rfc2898DeriveBytes(identityBytes, _storageSalt, 50000, HashAlgorithmName.SHA256);
+            legacyKey = pbkdf2.GetBytes(32);
+
             var iv = new byte[16];
             Buffer.BlockCopy(data, 0, iv, 0, 16);
             var encrypted = new byte[data.Length - 16];
@@ -236,16 +242,17 @@ public static class FileService
             aes.KeySize = 256;
             aes.Mode = CipherMode.CBC;
             aes.Padding = PaddingMode.PKCS7;
-            aes.Key = _storageKey;
+            aes.Key = legacyKey;
             aes.IV = iv;
 
             using var decryptor = aes.CreateDecryptor();
             var decrypted = decryptor.TransformFinalBlock(encrypted, 0, encrypted.Length);
             return System.Text.Encoding.UTF8.GetString(decrypted);
         }
-        catch
+        catch { return null; }
+        finally
         {
-            return null;
+            if (legacyKey != null) CryptographicOperations.ZeroMemory(legacyKey);
         }
     }
 
@@ -267,14 +274,110 @@ public static class FileService
         }
     }
 
+    /// <summary>Encrypt an existing file in-place (returns path to .enc file).</summary>
+    public static string EncryptExistingFile(string sourcePath)
+    {
+        try
+        {
+            var encPath = sourcePath + ".enc";
+            var fileBytes = File.ReadAllBytes(sourcePath);
+            var encrypted = ProtectedData.Protect(fileBytes, _storageSalt, DataProtectionScope.CurrentUser);
+            File.WriteAllBytes(encPath, encrypted);
+            return encPath;
+        }
+        catch (Exception ex)
+        {
+            LogService.Log("Failed to encrypt existing file", ex);
+            return "";
+        }
+    }
+
+    /// <summary>Copy a file to local Files/ folder and encrypt it with DPAPI.</summary>
+    public static string SaveAndEncryptFile(string sourcePath)
+    {
+        try
+        {
+            EnsureDirectories();
+            var ext = Path.GetExtension(sourcePath);
+            var fileName = $"{Guid.NewGuid():N}{ext}.enc";
+            var destPath = Path.Combine(_filesFolder, fileName);
+
+            var fileBytes = File.ReadAllBytes(sourcePath);
+            var encrypted = ProtectedData.Protect(fileBytes, _storageSalt, DataProtectionScope.CurrentUser);
+            File.WriteAllBytes(destPath, encrypted);
+            return destPath;
+        }
+        catch (Exception ex)
+        {
+            LogService.Log("Failed to save and encrypt file", ex);
+            return "";
+        }
+    }
+
+    /// <summary>Decrypt a .enc file and write to a temp file. Caller should clean up.</summary>
+    public static string? DecryptFileToTemp(string encPath)
+    {
+        try
+        {
+            var encrypted = File.ReadAllBytes(encPath);
+            var decrypted = ProtectedData.Unprotect(encrypted, _storageSalt, DataProtectionScope.CurrentUser);
+
+            // Get original extension by removing .enc suffix
+            var nameWithoutEnc = Path.GetFileNameWithoutExtension(encPath); // e.g., guid.png
+            var ext = Path.GetExtension(nameWithoutEnc); // e.g., .png
+            if (string.IsNullOrEmpty(ext)) ext = ".tmp";
+
+            var tempPath = Path.Combine(Path.GetTempPath(), $"jie_clip_{Guid.NewGuid():N}{ext}");
+            File.WriteAllBytes(tempPath, decrypted);
+            return tempPath;
+        }
+        catch (Exception ex)
+        {
+            LogService.Log("Failed to decrypt file to temp", ex);
+            return null;
+        }
+    }
+
+    /// <summary>Decrypt a .enc file and return the raw bytes (for in-memory use like thumbnails).</summary>
+    public static byte[]? DecryptFileBytes(string encPath)
+    {
+        try
+        {
+            var encrypted = File.ReadAllBytes(encPath);
+            return ProtectedData.Unprotect(encrypted, _storageSalt, DataProtectionScope.CurrentUser);
+        }
+        catch (Exception ex)
+        {
+            LogService.Log("Failed to decrypt file bytes", ex);
+            return null;
+        }
+    }
+
     public static void DeleteRecordFiles(ClipboardRecord record)
     {
         try
         {
-            if (record.ContentType == ClipboardContentType.Image && !record.IsEncrypted)
+            if (record.IsEncrypted) return;
+
+            if (record.ContentType == ClipboardContentType.Image)
             {
+                // Delete the image file (plain or encrypted)
                 if (File.Exists(record.Content))
                     File.Delete(record.Content);
+            }
+            else if (record.ContentType is ClipboardContentType.FileDrop or ClipboardContentType.Video)
+            {
+                // Delete encrypted local copies (.enc files in our Files folder)
+                var paths = record.Content.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                foreach (var path in paths)
+                {
+                    if (path.EndsWith(".enc", StringComparison.OrdinalIgnoreCase) &&
+                        path.StartsWith(_filesFolder, StringComparison.OrdinalIgnoreCase) &&
+                        File.Exists(path))
+                    {
+                        File.Delete(path);
+                    }
+                }
             }
         }
         catch (Exception ex)
@@ -305,7 +408,7 @@ public static class FileService
         }
     }
 
-    public static string ExportRecords(List<ClipboardRecord> records, AppConfig? config, string filePath)
+    public static string ExportRecords(List<ClipboardRecord> records, AppConfig? config, string filePath, string? password = null)
     {
         try
         {
@@ -317,7 +420,48 @@ public static class FileService
                 Version = "1.0.0"
             };
             var json = JsonSerializer.Serialize(exportData, _jsonOptions);
-            File.WriteAllText(filePath, json);
+
+            if (!string.IsNullOrEmpty(password))
+            {
+                // Encrypted export: JIEEXP magic + version(1) + salt(16) + iv(16) + encrypted data
+                var salt = RandomNumberGenerator.GetBytes(16);
+                var iv = RandomNumberGenerator.GetBytes(16);
+                byte[]? key = null;
+                try
+                {
+                    using var pbkdf2 = new Rfc2898DeriveBytes(
+                        System.Text.Encoding.UTF8.GetBytes(password), salt, 100000, HashAlgorithmName.SHA256);
+                    key = pbkdf2.GetBytes(32);
+
+                    using var aes = Aes.Create();
+                    aes.KeySize = 256;
+                    aes.Mode = CipherMode.CBC;
+                    aes.Padding = PaddingMode.PKCS7;
+                    aes.Key = key;
+                    aes.IV = iv;
+
+                    var plainBytes = System.Text.Encoding.UTF8.GetBytes(json);
+                    byte[] encrypted;
+                    using (var encryptor = aes.CreateEncryptor())
+                        encrypted = encryptor.TransformFinalBlock(plainBytes, 0, plainBytes.Length);
+
+                    using var fs = new FileStream(filePath, FileMode.Create, FileAccess.Write);
+                    var magic = System.Text.Encoding.ASCII.GetBytes("JIEEXP");
+                    fs.Write(magic, 0, 6);
+                    fs.WriteByte(1); // version
+                    fs.Write(salt, 0, 16);
+                    fs.Write(iv, 0, 16);
+                    fs.Write(encrypted, 0, encrypted.Length);
+                }
+                finally
+                {
+                    if (key != null) CryptographicOperations.ZeroMemory(key);
+                }
+            }
+            else
+            {
+                File.WriteAllText(filePath, json);
+            }
             return "";
         }
         catch (Exception ex)
@@ -327,11 +471,19 @@ public static class FileService
         }
     }
 
-    public static (List<ClipboardRecord>? records, AppConfig? config, string error) ImportRecords(string filePath)
+    public static (List<ClipboardRecord>? records, AppConfig? config, string error) ImportRecords(string filePath, Control? owner = null)
     {
         try
         {
-            var json = File.ReadAllText(filePath);
+            var fileBytes = File.ReadAllBytes(filePath);
+
+            // Check for encrypted export (JIEEXP magic header)
+            if (fileBytes.Length > 39 && System.Text.Encoding.ASCII.GetString(fileBytes, 0, 6) == "JIEEXP")
+            {
+                return ImportEncryptedRecords(fileBytes, owner);
+            }
+
+            var json = System.Text.Encoding.UTF8.GetString(fileBytes);
             var data = JsonSerializer.Deserialize<ExportData>(json, _jsonOptions);
             if (data == null) return (null, null, "备份文件格式无效");
             return (data.Records, data.Config, "");
@@ -343,13 +495,79 @@ public static class FileService
         }
     }
 
+    private static (List<ClipboardRecord>? records, AppConfig? config, string error) ImportEncryptedRecords(byte[] fileBytes, Control? owner)
+    {
+        // Ask for password
+        using var pwDialog = new JIE剪切板.Dialogs.PasswordDialog();
+        pwDialog.Text = "导入文件已加密";
+        pwDialog.TopMost = true;
+        if (owner != null)
+        {
+            if (pwDialog.ShowDialog(owner) != DialogResult.OK)
+                return (null, null, "已取消导入");
+        }
+        else
+        {
+            if (pwDialog.ShowDialog() != DialogResult.OK)
+                return (null, null, "已取消导入");
+        }
+
+        byte[]? key = null;
+        try
+        {
+            var version = fileBytes[6];
+            if (version != 1) return (null, null, "不支持的导出文件版本");
+
+            var salt = new byte[16];
+            var iv = new byte[16];
+            Buffer.BlockCopy(fileBytes, 7, salt, 0, 16);
+            Buffer.BlockCopy(fileBytes, 23, iv, 0, 16);
+            var encrypted = new byte[fileBytes.Length - 39];
+            Buffer.BlockCopy(fileBytes, 39, encrypted, 0, encrypted.Length);
+
+            using var pbkdf2 = new Rfc2898DeriveBytes(
+                System.Text.Encoding.UTF8.GetBytes(pwDialog.Password), salt, 100000, HashAlgorithmName.SHA256);
+            key = pbkdf2.GetBytes(32);
+
+            using var aes = Aes.Create();
+            aes.KeySize = 256;
+            aes.Mode = CipherMode.CBC;
+            aes.Padding = PaddingMode.PKCS7;
+            aes.Key = key;
+            aes.IV = iv;
+
+            byte[] decrypted;
+            using (var decryptor = aes.CreateDecryptor())
+                decrypted = decryptor.TransformFinalBlock(encrypted, 0, encrypted.Length);
+
+            var json = System.Text.Encoding.UTF8.GetString(decrypted);
+            var data = JsonSerializer.Deserialize<ExportData>(json, _jsonOptions);
+            if (data == null) return (null, null, "解密成功但数据格式无效");
+            return (data.Records, data.Config, "");
+        }
+        catch (CryptographicException)
+        {
+            return (null, null, "密码错误，无法解密导出文件");
+        }
+        catch (Exception ex)
+        {
+            LogService.Log("Import encrypted failed", ex);
+            return (null, null, $"导入解密失败: {ex.Message}");
+        }
+        finally
+        {
+            if (key != null) CryptographicOperations.ZeroMemory(key);
+        }
+    }
+
     private static void BackupCorruptFile(string filePath)
     {
         try
         {
             if (File.Exists(filePath))
             {
-                var backupPath = $"{filePath}_bak_{DateTime.Now:yyyyMMdd_HHmmss}.json";
+                var ext = Path.GetExtension(filePath);
+                var backupPath = $"{filePath}_bak_{DateTime.Now:yyyyMMdd_HHmmss}{ext}";
                 File.Move(filePath, backupPath);
             }
         }

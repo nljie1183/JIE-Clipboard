@@ -12,6 +12,9 @@ public class RecordListPanel : Panel
     private int _itemHeight = DpiHelper.Scale(60);
     private readonly VScrollBar _scrollBar;
     private readonly Dictionary<string, Image?> _thumbnailCache = new();
+    private readonly Font _pinFont;
+    private Font? _smallFont;
+    private float _lastSmallFontSize;
 
     public event EventHandler<ClipboardRecord>? RecordClicked;
     public event EventHandler<(ClipboardRecord record, Point location)>? RecordRightClicked;
@@ -25,6 +28,8 @@ public class RecordListPanel : Panel
         _scrollBar = new VScrollBar { Dock = DockStyle.Right, Visible = false };
         _scrollBar.Scroll += (_, _) => { _scrollOffset = _scrollBar.Value; Invalidate(); };
         Controls.Add(_scrollBar);
+
+        _pinFont = new Font("Segoe UI Emoji", DpiHelper.ScaleF(9f));
     }
 
     public void SetRecords(List<ClipboardRecord> records)
@@ -32,6 +37,8 @@ public class RecordListPanel : Panel
         _records = records;
         _hoverIndex = -1;
         _scrollOffset = 0;
+        if (_thumbnailCache.Count > 200)
+            ClearThumbnailCache();
         UpdateScrollBar();
         Invalidate();
     }
@@ -128,9 +135,8 @@ public class RecordListPanel : Panel
         // Pin indicator
         if (record.IsPinned)
         {
-            using var pinFont = new Font("Segoe UI Emoji", DpiHelper.ScaleF(9f));
             using var pinBrush = new SolidBrush(ThemeService.ThemeColor);
-            g.DrawString("📌", pinFont, pinBrush, rect.X + DpiHelper.Scale(5), rect.Y + DpiHelper.Scale(4));
+            g.DrawString("📌", _pinFont, pinBrush, rect.X + DpiHelper.Scale(5), rect.Y + DpiHelper.Scale(4));
         }
 
         int leftMargin = record.IsPinned ? DpiHelper.Scale(25) : DpiHelper.Scale(10);
@@ -164,8 +170,7 @@ public class RecordListPanel : Panel
         using (var timeBrush = new SolidBrush(ThemeService.SecondaryTextColor))
         {
             var sf = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center };
-            using var smallFont = new Font(ThemeService.GlobalFont.FontFamily, ThemeService.GlobalFont.Size - 1);
-            g.DrawString(timeStr, smallFont, timeBrush, timeRect, sf);
+            g.DrawString(timeStr, GetSmallFont(), timeBrush, timeRect, sf);
         }
 
         // Bottom border
@@ -179,9 +184,21 @@ public class RecordListPanel : Panel
         {
             if (!_thumbnailCache.TryGetValue(record.Id, out var thumb))
             {
-                if (File.Exists(record.Content))
+                byte[]? imageBytes = null;
+                if (record.Content.EndsWith(".enc", StringComparison.OrdinalIgnoreCase) && File.Exists(record.Content))
                 {
-                    using var original = Image.FromFile(record.Content);
+                    // Decrypt encrypted image in memory
+                    imageBytes = FileService.DecryptFileBytes(record.Content);
+                }
+                else if (File.Exists(record.Content))
+                {
+                    imageBytes = File.ReadAllBytes(record.Content);
+                }
+
+                if (imageBytes != null)
+                {
+                    using var ms = new MemoryStream(imageBytes);
+                    using var original = Image.FromStream(ms);
                     thumb = original.GetThumbnailImage(rect.Width, rect.Height, () => false, IntPtr.Zero);
                 }
                 _thumbnailCache[record.Id] = thumb;
@@ -247,5 +264,28 @@ public class RecordListPanel : Panel
         foreach (var img in _thumbnailCache.Values)
             img?.Dispose();
         _thumbnailCache.Clear();
+    }
+
+    private Font GetSmallFont()
+    {
+        var targetSize = Math.Max(6f, ThemeService.GlobalFont.Size - 1);
+        if (_smallFont == null || _lastSmallFontSize != targetSize)
+        {
+            _smallFont?.Dispose();
+            _smallFont = new Font(ThemeService.GlobalFont.FontFamily, targetSize);
+            _lastSmallFontSize = targetSize;
+        }
+        return _smallFont;
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            ClearThumbnailCache();
+            _pinFont?.Dispose();
+            _smallFont?.Dispose();
+        }
+        base.Dispose(disposing);
     }
 }

@@ -20,6 +20,7 @@ public class NavigationListBox : Control
     private int IconLeft => DpiHelper.Scale(16);
     private int TextLeft => DpiHelper.Scale(48);
     private float IconFontSize => DpiHelper.ScaleF(12f);
+    private readonly Font _iconFont;
 
     public event EventHandler<int>? SelectedIndexChanged;
     public int SelectedIndex
@@ -52,6 +53,8 @@ public class NavigationListBox : Control
             new() { Text = "导出导入", Icon = "📁" },
             new() { Text = "关于", Icon = "ℹ" }
         });
+
+        _iconFont = new Font("Segoe UI Emoji", DpiHelper.ScaleF(12f));
     }
 
     protected override void OnPaint(PaintEventArgs e)
@@ -103,11 +106,10 @@ public class NavigationListBox : Control
 
         // Icon
         var iconRect = new Rectangle(iconLeft, rect.Y + (itemH - iconSize) / 2, iconSize, iconSize);
-        using (var iconFont = new Font("Segoe UI Emoji", IconFontSize))
         using (var iconBrush = new SolidBrush(textColor))
         {
             var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-            g.DrawString(item.Icon, iconFont, iconBrush, iconRect, sf);
+            g.DrawString(item.Icon, _iconFont, iconBrush, iconRect, sf);
         }
 
         // Text
@@ -148,5 +150,11 @@ public class NavigationListBox : Control
         if (index >= 0 && index < _items.Count)
             SelectedIndex = index;
         base.OnMouseClick(e);
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) _iconFont?.Dispose();
+        base.Dispose(disposing);
     }
 }

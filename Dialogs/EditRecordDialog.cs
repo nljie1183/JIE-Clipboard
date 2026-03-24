@@ -8,6 +8,9 @@ public class EditRecordDialog : Form
 {
     private readonly ClipboardRecord _record;
     private readonly AppConfig _config;
+    private readonly string? _decryptedContent;
+    private readonly ClipboardContentType? _decryptedType;
+    private readonly string? _existingPassword;
 
     private TextBox _txtContent = null!;
     private DateTimePicker _dtpExpire = null!;
@@ -17,10 +20,14 @@ public class EditRecordDialog : Form
     private TextBox _txtPassword = null!, _txtPasswordConfirm = null!;
     private Panel _encryptPanel = null!, _securityPanel = null!;
 
-    public EditRecordDialog(ClipboardRecord record, AppConfig config)
+    public EditRecordDialog(ClipboardRecord record, AppConfig config,
+        string? decryptedContent = null, ClipboardContentType? decryptedType = null, string? existingPassword = null)
     {
         _record = record;
         _config = config;
+        _decryptedContent = decryptedContent;
+        _decryptedType = decryptedType;
+        _existingPassword = existingPassword;
         InitializeForm();
         InitializeControls();
         LoadRecord();
@@ -248,8 +255,22 @@ public class EditRecordDialog : Form
 
     private void LoadRecord()
     {
-        // Content - for text types allow editing, for binary types show info
-        if (_record.ContentType is ClipboardContentType.PlainText or ClipboardContentType.RichText)
+        // Content - for encrypted records with decrypted content, show the real content
+        if (_decryptedContent != null)
+        {
+            var effectiveType = _decryptedType ?? _record.ContentType;
+            if (effectiveType is ClipboardContentType.PlainText or ClipboardContentType.RichText)
+            {
+                _txtContent.Text = _decryptedContent;
+                _txtContent.ReadOnly = false;
+            }
+            else
+            {
+                _txtContent.Text = _decryptedContent;
+                _txtContent.ReadOnly = true;
+            }
+        }
+        else if (_record.ContentType is ClipboardContentType.PlainText or ClipboardContentType.RichText)
         {
             _txtContent.Text = _record.Content;
             _txtContent.ReadOnly = false;
@@ -291,13 +312,35 @@ public class EditRecordDialog : Form
     {
         try
         {
+            // Determine the effective content type for decrypted records
+            var effectiveType = _decryptedType ?? _record.ContentType;
+
             // Update content for text types
-            if (_record.ContentType is ClipboardContentType.PlainText or ClipboardContentType.RichText)
+            if (effectiveType is ClipboardContentType.PlainText or ClipboardContentType.RichText)
             {
                 if (!_record.IsEncrypted)
                 {
                     _record.Content = _txtContent.Text;
                     _record.ContentHash = EncryptionService.ComputeContentHash(_record.Content);
+                }
+                else if (_decryptedContent != null && _txtContent.Text != _decryptedContent)
+                {
+                    // Content was edited while encrypted — need to re-encrypt with updated content
+                    var password = _existingPassword;
+                    if (string.IsNullOrEmpty(password))
+                    {
+                        MessageBox.Show(this, "无法保存修改：缺少加密密码", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        return;
+                    }
+                    // Temporarily restore unencrypted state to re-encrypt
+                    _record.IsEncrypted = false;
+                    _record.Content = _txtContent.Text;
+                    _record.ContentType = effectiveType;
+                    if (!EncryptionService.EncryptRecord(_record, password))
+                    {
+                        MessageBox.Show(this, "重新加密失败", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        return;
+                    }
                 }
             }
 
