@@ -17,6 +17,7 @@ public class SecurityPage : UserControl
     private bool _isLoading; // 加载设置时禁止触发保存
     private NumericUpDown _numMaxAttempts = null!, _numBaseLock = null!;
     private ToggleSwitch _swAutoDelete = null!, _swSearchEncrypted = null!;
+    private ToggleSwitch _swSearchEncryptedHint = null!;
 
     public SecurityPage(MainForm mainForm)
     {
@@ -133,6 +134,15 @@ public class SecurityPage : UserControl
         searchRow.Controls.Add(_swSearchEncrypted);
         layout.Controls.Add(searchPanel);
 
+        // 加密提示搜索设置
+        var hintPanel = CreateSettingPanel("允许搜索加密提示：",
+            "关闭时，搜索不会匹配加密提示字段，仅支持内容或\"加密内容\"关键字。");
+        _swSearchEncryptedHint = new ToggleSwitch { Margin = new Padding(DpiHelper.Scale(10), 0, 0, 0) };
+        _swSearchEncryptedHint.CheckedChanged += (_, _) => SaveSettings();
+        var hintRow = (FlowLayoutPanel)hintPanel.Controls[0];
+        hintRow.Controls.Add(_swSearchEncryptedHint);
+        layout.Controls.Add(hintPanel);
+
         var searchWarning = new Label
         {
             Text = "⚠ 启用搜索加密内容可能需要临时解密数据，存在安全风险。请谨慎使用。",
@@ -146,17 +156,28 @@ public class SecurityPage : UserControl
         Controls.Add(layout);
     }
 
-    /// <summary>创建设置项容器（标题行 + 描述文本）</summary>
+    /// <summary>创建设置项容器（标题行 + 描述文本），使用垂直 FlowLayout 确保间距一致</summary>
     private Panel CreateSettingPanel(string labelText, string descText)
     {
-        var container = new Panel { AutoSize = true, Width = DpiHelper.Scale(600), Margin = new Padding(0, 0, 0, DpiHelper.Scale(5)) };
+        // 外层垂直 FlowLayout：标题行在上，描述在下，自动管理高度
+        var container = new FlowLayoutPanel
+        {
+            FlowDirection = FlowDirection.TopDown,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            WrapContents = false,
+            Width = DpiHelper.Scale(600),
+            Margin = new Padding(0, DpiHelper.Scale(14), 0, DpiHelper.Scale(6))
+        };
 
+        // 标题行（水平排列：标签 + 控件，控件由调用方后续添加）
         var row = new FlowLayoutPanel
         {
             FlowDirection = FlowDirection.LeftToRight,
             AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
             WrapContents = false,
-            Margin = new Padding(0, DpiHelper.Scale(5), 0, 0)
+            Margin = new Padding(0, 0, 0, DpiHelper.Scale(2))
         };
         row.Controls.Add(new Label
         {
@@ -168,19 +189,16 @@ public class SecurityPage : UserControl
         });
         container.Controls.Add(row);
 
+        // 描述文本（紧跟标题行下方，灰色小字）
         var desc = new Label
         {
             Text = descText,
             ForeColor = ThemeService.SecondaryTextColor,
             AutoSize = true,
             MaximumSize = new Size(DpiHelper.Scale(550), 0),
-            Margin = new Padding(DpiHelper.Scale(10), 0, 0, 0),
-            Location = new Point(DpiHelper.Scale(10), row.Bottom + 2)
+            Margin = new Padding(DpiHelper.Scale(10), 0, 0, DpiHelper.Scale(4))
         };
         container.Controls.Add(desc);
-
-        // 调整容器高度
-        container.Height = row.Height + desc.Height + 10;
 
         return container;
     }
@@ -195,6 +213,7 @@ public class SecurityPage : UserControl
         _numBaseLock.Value = Math.Max(_numBaseLock.Minimum, Math.Min(_numBaseLock.Maximum, config.DefaultBaseLockMinutes));
         _swAutoDelete.Checked = config.DefaultAutoDeleteOnExceed;
         _swSearchEncrypted.Checked = config.AllowSearchEncryptedContent;
+        _swSearchEncryptedHint.Checked = config.AllowSearchEncryptedHint;
         }
         finally { _isLoading = false; }
     }
@@ -209,6 +228,7 @@ public class SecurityPage : UserControl
             config.DefaultBaseLockMinutes = (int)_numBaseLock.Value;
             config.DefaultAutoDeleteOnExceed = _swAutoDelete.Checked;
             config.AllowSearchEncryptedContent = _swSearchEncrypted.Checked;
+            config.AllowSearchEncryptedHint = _swSearchEncryptedHint.Checked;
             FileService.SaveConfig(config);
         }
         catch (Exception ex)

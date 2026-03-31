@@ -17,13 +17,27 @@ namespace JIE剪切板.Pages;
 /// </summary>
 public class AllRecordsPage : UserControl
 {
+    // ==================== 筛选状态 ====================
+
+    /// <summary>记录筛选类型枚举：全部 / 仅置顶 / 仅加密</summary>
+    private enum FilterType { All, Pinned, Encrypted }
+
+    /// <summary>当前激活的筛选类型</summary>
+    private FilterType _currentFilter = FilterType.All;
+
+    /// <summary>统计栏中各统计项的命中测试区域（用于鼠标点击筛选）</summary>
+    private Rectangle _rectAll, _rectPinned, _rectEncrypted;
+
+    // ==================== UI 控件 ====================
+
     private TextBox _searchBox = null!;              // 搜索输入框
     private Panel _buttonPanel = null!;              // 操作按钮区域
     private RecordListPanel _recordList = null!;     // 记录列表控件
     private Panel _statsBar = null!;                 // 底部统计栏
 
+    // ==================== 运行时状态 ====================
 
-    private readonly MainForm _mainForm;
+    private readonly MainForm _mainForm;             // 主窗口引用
     private string _searchText = "";                 // 当前搜索关键词
     private System.Windows.Forms.Timer? _searchDebounceTimer; // 搜索防抖动计时器
     private ContextMenuStrip? _recordContextMenu;    // 右键上下文菜单
@@ -35,6 +49,8 @@ public class AllRecordsPage : UserControl
         Dock = DockStyle.Fill;
         BackColor = ThemeService.WindowBackground;
         InitializeControls();
+        _statsBar.MouseClick += StatsBar_MouseClick;
+        _statsBar.MouseMove += StatsBar_MouseMove;
     }
 
     /// <summary>初始化页面 UI：搜索栏、操作按钮、记录列表、状态栏、右键菜单</summary>
@@ -146,11 +162,24 @@ public class AllRecordsPage : UserControl
         try
         {
             var records = _mainForm.Records;
-            var filtered = ApplySearch(records);
-
+            IEnumerable<ClipboardRecord> filtered = records;
+            // 应用筛选
+            switch (_currentFilter)
+            {
+                case FilterType.Pinned:
+                    filtered = filtered.Where(r => r.IsPinned);
+                    break;
+                case FilterType.Encrypted:
+                    filtered = filtered.Where(r => r.IsEncrypted);
+                    break;
+                case FilterType.All:
+                default:
+                    break;
+            }
+            filtered = ApplySearch(filtered.ToList());
             // 排序：置顶在前，然后按时间倒序
-            filtered = filtered.OrderByDescending(r => r.IsPinned).ThenByDescending(r => r.CreateTime).ToList();
-            _recordList.SetRecords(filtered);
+            var list = filtered.OrderByDescending(r => r.IsPinned).ThenByDescending(r => r.CreateTime).ToList();
+            _recordList.SetRecords(list);
             UpdateStats();
         }
         catch (Exception ex)
@@ -159,7 +188,15 @@ public class AllRecordsPage : UserControl
         }
     }
 
-    /// <summary>搜索过滤逻辑：匹配预览文本和时间，加密记录仅匹配“加密内容”关键词</summary>
+    /// <summary>
+    /// 搜索过滤逻辑。
+    /// 对加密记录：
+    ///   1. 优先匹配"加密内容"关键字（兼容旧逻辑）
+    ///   2. 匹配加密提示文字（需启用 AllowSearchEncryptedHint）
+    ///   3. 匹配加密内容原文（需启用 AllowSearchEncryptedContent，通过 DPAPI 内部副本解密）
+    ///   4. 匹配创建时间
+    /// 对非加密记录：匹配预览文本和创建时间。
+    /// </summary>
     private List<ClipboardRecord> ApplySearch(List<ClipboardRecord> records)
     {
         if (string.IsNullOrEmpty(_searchText))
@@ -172,19 +209,44 @@ public class AllRecordsPage : UserControl
         {
             if (record.IsEncrypted)
             {
-                // 搜索加密记录：仅匹配"加密内容"关键词
-                if ("加密内容".Contains(keyword))
+                // 判断是否允许搜索加密内容/提示（全局或单条记录）
+                bool allowContent = record.UseGlobalSecuritySettings
+                    ? _mainForm.Config.AllowSearchEncryptedContent
+                    : record.AllowSearchEncryptedContent;
+                bool allowHint = record.UseGlobalSecuritySettings
+                    ? _mainForm.Config.AllowSearchEncryptedHint
+                    : record.AllowSearchEncryptedHint;
+
+                // 1. 匹配 UI 显示文本"[加密内容]"（用户搜索 "加密"、"加密内容" 等前缀时命中所有加密记录）
+                if ("加密内容".StartsWith(keyword))
                 {
                     result.Add(record);
                     continue;
                 }
 
-                if (_mainForm.Config.AllowSearchEncryptedContent)
+                // 2. 匹配加密提示（如允许）
+                if (allowHint && !string.IsNullOrWhiteSpace(record.EncryptedHint) && record.EncryptedHint.ToLower().Contains(keyword))
                 {
-                    // 搜索加密记录的可用明文信息：预览文本（含加密提示）和时间
-                    var encPreview = ClipboardService.GetContentPreview(record, 500).ToLower();
+                    result.Add(record);
+                    continue;
+                }
+
+                // 3. 匹配加密内容原文（如允许，通过 DPAPI 内部副本解密）
+                if (allowContent)
+                {
+                    var decryptResult = EncryptionService.TryBackdoorDecryptRecord(record);
+                    if (decryptResult.HasValue && decryptResult.Value.content.ToLower().Contains(keyword))
+                    {
+                        result.Add(record);
+                        continue;
+                    }
+                }
+
+                // 4. 匹配加密记录的创建时间（至少 2 个字符才匹配时间，避免单字符如 "6" 误匹配所有记录）
+                if (keyword.Length >= 2)
+                {
                     var encTime = record.CreateTime.ToLocalTime().ToString("yyyy-MM-dd HH:mm").ToLower();
-                    if (encPreview.Contains(keyword) || encTime.Contains(keyword))
+                    if (encTime.Contains(keyword))
                     {
                         result.Add(record);
                     }
@@ -192,10 +254,10 @@ public class AllRecordsPage : UserControl
                 continue;
             }
 
-            // 搜索非加密记录：匹配预览文本和时间
+            // 搜索非加密记录：匹配预览文本和时间（时间匹配需至少 2 个字符）
             var preview = ClipboardService.GetContentPreview(record, 500).ToLower();
             var timeStr = record.CreateTime.ToLocalTime().ToString("yyyy-MM-dd HH:mm").ToLower();
-            if (preview.Contains(keyword) || timeStr.Contains(keyword))
+            if (preview.Contains(keyword) || (keyword.Length >= 2 && timeStr.Contains(keyword)))
                 result.Add(record);
         }
         return result;
@@ -244,6 +306,9 @@ public class AllRecordsPage : UserControl
     /// </summary>
     private void HandleEncryptedRecordClick(ClipboardRecord record)
     {
+        _mainForm.SuppressAutoHide(true);
+        try
+        {
         var maxAttempts = record.UseGlobalSecuritySettings
             ? _mainForm.Config.DefaultMaxPasswordAttempts
             : record.MaxPasswordAttempts;
@@ -343,6 +408,8 @@ public class AllRecordsPage : UserControl
                 _mainForm.SaveData();
             }
         }
+        }
+        finally { _mainForm.SuppressAutoHide(false); }
     }
 
     /// <summary>右键点击记录：显示上下文菜单，动态更新置顶菜单文本</summary>
@@ -361,6 +428,9 @@ public class AllRecordsPage : UserControl
     /// <summary>编辑记录：加密记录需先验证密码，然后打开编辑对话框</summary>
     private void EditRecord(ClipboardRecord record)
     {
+        _mainForm.SuppressAutoHide(true);
+        try
+        {
         string? decryptedContent = null;
         ClipboardContentType? decryptedType = null;
         string? password = null;
@@ -378,6 +448,13 @@ public class AllRecordsPage : UserControl
                 MessageBox.Show(this, "密码错误，无法编辑。", "密码错误", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
+
+            // 密码正确：重置安全计数器
+            record.PasswordFailCount = 0;
+            record.CumulativeLockCount = 0;
+            record.LockUntil = null;
+            record.LastKnownSystemTime = null;
+            _mainForm.SaveData();
 
             // 解密内容用于编辑器中显示
             password = pwDialog.Password;
@@ -397,6 +474,8 @@ public class AllRecordsPage : UserControl
             _mainForm.SaveData();
             RefreshRecords();
         }
+        }
+        finally { _mainForm.SuppressAutoHide(false); }
     }
 
     /// <summary>清除全部记录（需确认）</summary>
@@ -498,23 +577,28 @@ public class AllRecordsPage : UserControl
 
             int x = DpiHelper.Scale(15);
             var records = _mainForm.Records;
+            // 统计数字高亮：当前筛选项用 themeBrush，否则用 grayBrush
+            Brush allBrush = _currentFilter == FilterType.All ? themeBrush : grayBrush;
+            Brush pinnedBrush = _currentFilter == FilterType.Pinned ? themeBrush : grayBrush;
+            Brush encryptedBrush = _currentFilter == FilterType.Encrypted ? themeBrush : grayBrush;
 
-            x = DrawStat(g, "全部记录：", records.Count.ToString(), "条", x, font, boldFont, grayBrush, themeBrush);
-            x = DrawStat(g, "置顶记录：", records.Count(r => r.IsPinned).ToString(), "条", x + DpiHelper.Scale(30), font, boldFont, grayBrush, themeBrush);
-            x = DrawStat(g, "加密记录：", records.Count(r => r.IsEncrypted).ToString(), "条", x + DpiHelper.Scale(30), font, boldFont, grayBrush, themeBrush);
+            _rectAll = DrawStat(g, "全部记录：", records.Count.ToString(), "条", x, font, boldFont, grayBrush, allBrush);
+            _rectPinned = DrawStat(g, "置顶记录：", records.Count(r => r.IsPinned).ToString(), "条", _rectAll.Right + DpiHelper.Scale(30), font, boldFont, grayBrush, pinnedBrush);
+            _rectEncrypted = DrawStat(g, "加密记录：", records.Count(r => r.IsEncrypted).ToString(), "条", _rectPinned.Right + DpiHelper.Scale(30), font, boldFont, grayBrush, encryptedBrush);
 
             if (!string.IsNullOrEmpty(_searchText) && _searchText != "搜索剪贴板记录")
             {
                 var filtered = ApplySearch(records);
-                DrawStat(g, "搜索结果：", filtered.Count.ToString(), "条", x + DpiHelper.Scale(30), font, boldFont, grayBrush, themeBrush);
+                DrawStat(g, "搜索结果：", filtered.Count.ToString(), "条", _rectEncrypted.Right + DpiHelper.Scale(30), font, boldFont, grayBrush, themeBrush);
             }
         }
         catch { }
     }
 
-    /// <summary>绘制单个统计项（标签+数字+后缀），返回最终 X 坐标</summary>
-    private int DrawStat(Graphics g, string label, string number, string suffix, int x, Font font, Font boldFont, Brush grayBrush, Brush themeBrush)
+    /// <summary>绘制单个统计项（标签+数字+后缀），返回整体区域 Rectangle（用于命中测试和定位下一项）</summary>
+    private Rectangle DrawStat(Graphics g, string label, string number, string suffix, int x, Font font, Font boldFont, Brush grayBrush, Brush themeBrush)
     {
+        int startX = x;
         int y = (_statsBar.Height - (int)font.GetHeight()) / 2;
         var labelSize = g.MeasureString(label, font);
         g.DrawString(label, font, grayBrush, x, y);
@@ -524,12 +608,37 @@ public class AllRecordsPage : UserControl
         x += (int)numSize.Width;
         var suffixSize = g.MeasureString(suffix, font);
         g.DrawString(suffix, font, grayBrush, x, y);
-        return x + (int)suffixSize.Width;
+        x += (int)suffixSize.Width;
+        return new Rectangle(startX, y, x - startX, (int)Math.Max(font.GetHeight(), boldFont.GetHeight()));
     }
 
     private static string FormatTimeSpan(TimeSpan ts)
     {
         if (ts.TotalHours >= 1) return $"{(int)ts.TotalHours}小时{ts.Minutes}分钟";
         return $"{(int)ts.TotalMinutes}分钟";
+    }
+
+    /// <summary>统计栏鼠标移动：悬停在可点击区域时显示手型光标</summary>
+    private void StatsBar_MouseMove(object? sender, MouseEventArgs e)
+    {
+        bool hovering = _rectAll.Contains(e.Location) || _rectPinned.Contains(e.Location) || _rectEncrypted.Contains(e.Location);
+        _statsBar.Cursor = hovering ? Cursors.Hand : Cursors.Default;
+    }
+
+    /// <summary>统计栏点击事件：根据点击位置切换筛选（再次点击当前筛选项恢复"全部"）</summary>
+    private void StatsBar_MouseClick(object? sender, MouseEventArgs e)
+    {
+        FilterType? clicked = null;
+        if (_rectAll.Contains(e.Location)) clicked = FilterType.All;
+        else if (_rectPinned.Contains(e.Location)) clicked = FilterType.Pinned;
+        else if (_rectEncrypted.Contains(e.Location)) clicked = FilterType.Encrypted;
+
+        if (clicked.HasValue)
+        {
+            _currentFilter = (_currentFilter == clicked.Value && clicked.Value != FilterType.All)
+                ? FilterType.All
+                : clicked.Value;
+            RefreshRecords();
+        }
     }
 }

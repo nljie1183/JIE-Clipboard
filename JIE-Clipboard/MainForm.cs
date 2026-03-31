@@ -45,6 +45,7 @@ public class MainForm : Form
     private bool _isExiting;                         // 是否正在退出（防止关闭时再次隐藏）
     private bool _pasteMode;                         // 贴入模式标记（不抢焦点，类似 Win+V）
     private readonly bool _startSilent;              // 静默启动标志（开机自启时直接托盘）
+    private bool _suppressAutoHide;                  // 对话框交互期间阻止自动隐藏
     private System.Windows.Forms.Timer? _clipboardWatchdog;  // 看门狗定时器（30s 检查监听是否中断）
     private System.Windows.Forms.Timer? _saveThrottleTimer;  // 保存节流定时器（500ms 合并多次保存）
     private bool _saveDataPending;                           // 是否有待写入的保存请求
@@ -332,12 +333,12 @@ public class MainForm : Form
     protected override void OnDeactivate(EventArgs e)
     {
         base.OnDeactivate(e);
-        if (_pasteMode) return; // 贴入模式不隐藏
+        if (_pasteMode || _suppressAutoHide) return; // 贴入模式或对话框交互期间不隐藏
         if (Config.HideOnLostFocus && Visible && !_isExiting)
         {
             BeginInvoke(() =>
             {
-                if (!Visible || _isExiting) return;
+                if (!Visible || _isExiting || _suppressAutoHide) return;
                 // 如果当前有子对话框（编辑/密码框）活动，不隐藏主窗口
                 var active = Form.ActiveForm;
                 if (active != null && active != this) return;
@@ -345,6 +346,9 @@ public class MainForm : Form
             });
         }
     }
+
+    /// <summary>对话框交互期间阻止自动隐藏（密码验证、MessageBox 等场景）</summary>
+    public void SuppressAutoHide(bool suppress) => _suppressAutoHide = suppress;
 
     /// <summary>
     /// 消息循环处理：

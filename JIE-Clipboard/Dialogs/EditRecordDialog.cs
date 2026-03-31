@@ -31,6 +31,8 @@ public class EditRecordDialog : Form
     private ToggleSwitch _swAutoDelete = null!;         // 超限自动删除开关
     private TextBox _txtPassword = null!, _txtPasswordConfirm = null!, _txtEncryptedHint = null!;
     private Panel _encryptPanel = null!, _securityPanel = null!; // 加密和安全设置面板
+    private ToggleSwitch _swAllowSearchEncryptedContent = null!;
+    private ToggleSwitch _swAllowSearchEncryptedHint = null!;
 
     /// <summary>
     /// 构造函数。
@@ -57,89 +59,152 @@ public class EditRecordDialog : Form
     private void InitializeForm()
     {
         Text = "编辑记录";
-        Size = new Size(550, 660);
         StartPosition = FormStartPosition.CenterParent;
-        FormBorderStyle = FormBorderStyle.FixedDialog;
+        FormBorderStyle = FormBorderStyle.Sizable;
         MaximizeBox = false;
         MinimizeBox = false;
         ShowInTaskbar = false;
         TopMost = true;
-        AutoScroll = true;
         BackColor = ThemeService.WindowBackground;
         ForeColor = ThemeService.TextColor;
         Font = ThemeService.GlobalFont;
+
+        var w = DpiHelper.Scale(550);
+        var h = DpiHelper.Scale(660);
+        Size = new Size(w, h);
+        MinimumSize = new Size(DpiHelper.Scale(480), DpiHelper.Scale(500));
     }
 
     /// <summary>
     /// 初始化所有 UI 控件：内容编辑、过期时间、复制次数、加密设置、安全策略、保存/取消按钮。
+    /// 布局：底部按钮栏（Dock.Bottom）+ 可滚动内容区域（Dock.Fill）。
     /// </summary>
     private void InitializeControls()
     {
-        int y = 15;
+        int pad = DpiHelper.Scale(15);
+
+        // ───── 底部按钮栏（固定在底部） ─────
+        var buttonBar = new Panel
+        {
+            Dock = DockStyle.Bottom,
+            Height = DpiHelper.Scale(55)
+        };
+
+        var btnCancel = new Button
+        {
+            Text = "取消",
+            Size = new Size(DpiHelper.Scale(90), DpiHelper.Scale(35)),
+            FlatStyle = FlatStyle.Flat,
+            ForeColor = ThemeService.TextColor,
+            BackColor = ThemeService.WindowBackground,
+            DialogResult = DialogResult.Cancel,
+            Anchor = AnchorStyles.Top | AnchorStyles.Right
+        };
+        btnCancel.FlatAppearance.BorderColor = ThemeService.BorderColor;
+        btnCancel.Location = new Point(ClientSize.Width - pad - btnCancel.Width, DpiHelper.Scale(10));
+
+        var btnSave = new Button
+        {
+            Text = "保存",
+            Size = new Size(DpiHelper.Scale(90), DpiHelper.Scale(35)),
+            FlatStyle = FlatStyle.Flat,
+            BackColor = ThemeService.ThemeColor,
+            ForeColor = Color.White,
+            Anchor = AnchorStyles.Top | AnchorStyles.Right
+        };
+        btnSave.FlatAppearance.BorderSize = 0;
+        btnSave.Click += BtnSave_Click;
+        btnSave.Location = new Point(btnCancel.Left - DpiHelper.Scale(8) - btnSave.Width, DpiHelper.Scale(10));
+
+        buttonBar.Controls.AddRange(new Control[] { btnSave, btnCancel });
+        CancelButton = btnCancel;
+
+        // ───── 可滚动内容区域 ─────
+        var scroll = new Panel
+        {
+            Dock = DockStyle.Fill,
+            AutoScroll = true
+        };
+
+        // 先将面板加入 Form 让 Dock 布局生效，再添加子控件，
+        // 否则 Anchor = Left|Right 基于 scroll 默认宽度计算右边距会出错
+        Controls.Add(scroll);
+        Controls.Add(buttonBar);
+
+        // 现在 scroll 已有正确尺寸，基于它计算子控件宽度
+        int ctrlW = scroll.ClientSize.Width - pad * 2;
+
+        int y = pad;
 
         // 内容编辑区
-        Controls.Add(CreateLabel("内容：", 15, y));
-        y += 22;
+        scroll.Controls.Add(CreateLabel("内容：", pad, y));
+        y += DpiHelper.Scale(22);
 
         _txtContent = new TextBox
         {
-            Location = new Point(15, y),
-            Size = new Size(500, 80),
+            Location = new Point(pad, y),
+            Size = new Size(ctrlW, DpiHelper.Scale(80)),
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
             Multiline = true,
             ScrollBars = ScrollBars.Vertical,
             BorderStyle = BorderStyle.FixedSingle,
             BackColor = ThemeService.IsDarkMode ? Color.FromArgb(50, 50, 50) : Color.White,
             ForeColor = ThemeService.TextColor
         };
-        Controls.Add(_txtContent);
-        y += 90;
+        scroll.Controls.Add(_txtContent);
+        y += DpiHelper.Scale(90);
 
         // 过期时间设置
         _chkExpire = new CheckBox
         {
             Text = "设置过期时间",
-            Location = new Point(15, y),
+            Location = new Point(pad, y),
             AutoSize = true,
             ForeColor = ThemeService.TextColor
         };
         _chkExpire.CheckedChanged += (_, _) => _dtpExpire.Enabled = _chkExpire.Checked;
-        Controls.Add(_chkExpire);
+        scroll.Controls.Add(_chkExpire);
 
         _dtpExpire = new DateTimePicker
         {
-            Location = new Point(150, y - 2),
-            Size = new Size(200, 25),
+            Location = new Point(DpiHelper.Scale(150), y - 2),
+            Size = new Size(DpiHelper.Scale(200), DpiHelper.Scale(25)),
             Format = DateTimePickerFormat.Custom,
             CustomFormat = "yyyy-MM-dd HH:mm",
             Enabled = false,
             Value = DateTime.Now.AddDays(7)
         };
-        Controls.Add(_dtpExpire);
-        y += 35;
+        scroll.Controls.Add(_dtpExpire);
+        y += DpiHelper.Scale(35);
 
         // 最大复制次数
-        Controls.Add(CreateLabel("最大复制次数（0=不限）：", 15, y + 3));
+        scroll.Controls.Add(CreateLabel("最大复制次数（0=不限）：", pad, y + 3));
         _numMaxCopy = new NumericUpDown
         {
-            Location = new Point(200, y),
-            Size = new Size(80, 25),
+            Location = new Point(DpiHelper.Scale(200), y),
+            Size = new Size(DpiHelper.Scale(80), DpiHelper.Scale(25)),
             Minimum = 0,
             Maximum = 100000,
             Value = 0
         };
-        Controls.Add(_numMaxCopy);
-        y += 35;
+        scroll.Controls.Add(_numMaxCopy);
+        y += DpiHelper.Scale(35);
 
         // 分隔线
-        var sep1 = new Panel { Location = new Point(15, y), Size = new Size(500, 1), BackColor = ThemeService.BorderColor };
-        Controls.Add(sep1);
-        y += 10;
+        scroll.Controls.Add(new Panel
+        {
+            Location = new Point(pad, y),
+            Size = new Size(ctrlW, 1),
+            BackColor = ThemeService.BorderColor,
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
+        });
+        y += DpiHelper.Scale(10);
 
         // 加密设置区
         _chkEncrypt = new CheckBox
         {
             Text = "加密此记录",
-            Location = new Point(15, y),
+            Location = new Point(pad, y),
             AutoSize = true,
             ForeColor = ThemeService.TextColor,
             Font = new Font(ThemeService.GlobalFont.FontFamily, 10f, FontStyle.Bold)
@@ -149,22 +214,23 @@ public class EditRecordDialog : Form
             _encryptPanel.Visible = _chkEncrypt.Checked;
             _securityPanel.Visible = _chkEncrypt.Checked && !_chkUseGlobal.Checked;
         };
-        Controls.Add(_chkEncrypt);
-        y += 30;
+        scroll.Controls.Add(_chkEncrypt);
+        y += DpiHelper.Scale(30);
 
         // 加密面板（密码输入、确认密码、提示文字）
         _encryptPanel = new Panel
         {
-            Location = new Point(15, y),
-            Size = new Size(500, 80),
+            Location = new Point(pad, y),
+            Size = new Size(ctrlW, DpiHelper.Scale(123)),
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
             Visible = false
         };
 
-        _encryptPanel.Controls.Add(CreateLabel("密码：", 0, 5));
+        _encryptPanel.Controls.Add(CreateLabel("密码：", 0, DpiHelper.Scale(5)));
         _txtPassword = new TextBox
         {
-            Location = new Point(100, 2),
-            Size = new Size(200, 25),
+            Location = new Point(DpiHelper.Scale(100), DpiHelper.Scale(2)),
+            Size = new Size(DpiHelper.Scale(200), DpiHelper.Scale(25)),
             UseSystemPasswordChar = true,
             BorderStyle = BorderStyle.FixedSingle,
             BackColor = ThemeService.IsDarkMode ? Color.FromArgb(50, 50, 50) : Color.White,
@@ -172,11 +238,11 @@ public class EditRecordDialog : Form
         };
         _encryptPanel.Controls.Add(_txtPassword);
 
-        _encryptPanel.Controls.Add(CreateLabel("确认密码：", 0, 38));
+        _encryptPanel.Controls.Add(CreateLabel("确认密码：", 0, DpiHelper.Scale(38)));
         _txtPasswordConfirm = new TextBox
         {
-            Location = new Point(100, 35),
-            Size = new Size(200, 25),
+            Location = new Point(DpiHelper.Scale(100), DpiHelper.Scale(35)),
+            Size = new Size(DpiHelper.Scale(200), DpiHelper.Scale(25)),
             UseSystemPasswordChar = true,
             BorderStyle = BorderStyle.FixedSingle,
             BackColor = ThemeService.IsDarkMode ? Color.FromArgb(50, 50, 50) : Color.White,
@@ -184,11 +250,11 @@ public class EditRecordDialog : Form
         };
         _encryptPanel.Controls.Add(_txtPasswordConfirm);
 
-        _encryptPanel.Controls.Add(CreateLabel("提示文字：", 0, 71));
+        _encryptPanel.Controls.Add(CreateLabel("提示文字：", 0, DpiHelper.Scale(71)));
         _txtEncryptedHint = new TextBox
         {
-            Location = new Point(100, 68),
-            Size = new Size(300, 25),
+            Location = new Point(DpiHelper.Scale(100), DpiHelper.Scale(68)),
+            Size = new Size(DpiHelper.Scale(300), DpiHelper.Scale(25)),
             BorderStyle = BorderStyle.FixedSingle,
             PlaceholderText = "可选，加密后显示的提示信息",
             MaxLength = 100,
@@ -202,81 +268,73 @@ public class EditRecordDialog : Form
         {
             Text = "使用全局安全设置",
             Checked = true,
-            Location = new Point(0, 98),
+            Location = new Point(0, DpiHelper.Scale(98)),
             AutoSize = true,
             ForeColor = ThemeService.TextColor
         };
         _chkUseGlobal.CheckedChanged += (_, _) => _securityPanel.Visible = _chkEncrypt.Checked && !_chkUseGlobal.Checked;
         _encryptPanel.Controls.Add(_chkUseGlobal);
-        _encryptPanel.Size = new Size(500, 123);
 
-        Controls.Add(_encryptPanel);
-        y += 128;
+        scroll.Controls.Add(_encryptPanel);
+        y += DpiHelper.Scale(128);
 
-        // 单条记录独立安全策略面板
-        _securityPanel = new Panel
+        // 单条记录独立安全策略面板（使用 FlowLayout 避免不同长度标签与控件重叠）
+        _securityPanel = new FlowLayoutPanel
         {
-            Location = new Point(15, y),
-            Size = new Size(500, 120),
+            Location = new Point(pad, y),
+            FlowDirection = FlowDirection.TopDown,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            WrapContents = false,
             Visible = false
         };
 
-        _securityPanel.Controls.Add(CreateLabel("最大尝试次数：", 0, 5));
-        _numMaxAttempts = new NumericUpDown
+        _numMaxAttempts = new NumericUpDown { Minimum = 1, Maximum = 100, Value = 3, Width = DpiHelper.Scale(70) };
+        _securityPanel.Controls.Add(CreateSettingRow("最大尝试次数：", _numMaxAttempts));
+
+        _numBaseLock = new NumericUpDown { Minimum = 1, Maximum = 10080, Value = 60, Width = DpiHelper.Scale(70) };
+        _securityPanel.Controls.Add(CreateSettingRow("基础锁定(分钟)：", _numBaseLock));
+
+        _swAutoDelete = new ToggleSwitch();
+        _securityPanel.Controls.Add(CreateSettingRow("超限自动删除：", _swAutoDelete));
+
+        _swAllowSearchEncryptedContent = new ToggleSwitch();
+        _securityPanel.Controls.Add(CreateSettingRow("允许搜索加密内容：", _swAllowSearchEncryptedContent));
+
+        _swAllowSearchEncryptedHint = new ToggleSwitch();
+        _securityPanel.Controls.Add(CreateSettingRow("允许搜索加密提示：", _swAllowSearchEncryptedHint));
+
+        scroll.Controls.Add(_securityPanel);
+    }
+
+    /// <summary>窗口显示后继承主窗口图标</summary>
+    protected override void OnShown(EventArgs e)
+    {
+        base.OnShown(e);
+        var icon = Owner?.Icon ?? Application.OpenForms.Cast<Form>().FirstOrDefault(f => f.Icon != null)?.Icon;
+        if (icon != null) Icon = icon;
+    }
+
+    /// <summary>创建安全设置行（标签 + 控件），FlowLayout 自动排列避免重叠</summary>
+    private FlowLayoutPanel CreateSettingRow(string labelText, Control ctrl)
+    {
+        var row = new FlowLayoutPanel
         {
-            Location = new Point(130, 2),
-            Size = new Size(70, 25),
-            Minimum = 1,
-            Maximum = 100,
-            Value = 3
+            FlowDirection = FlowDirection.LeftToRight,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            WrapContents = false,
+            Margin = new Padding(0, DpiHelper.Scale(4), 0, DpiHelper.Scale(4))
         };
-        _securityPanel.Controls.Add(_numMaxAttempts);
-
-        _securityPanel.Controls.Add(CreateLabel("基础锁定(分钟)：", 0, 38));
-        _numBaseLock = new NumericUpDown
+        row.Controls.Add(new Label
         {
-            Location = new Point(130, 35),
-            Size = new Size(70, 25),
-            Minimum = 1,
-            Maximum = 10080,
-            Value = 60
-        };
-        _securityPanel.Controls.Add(_numBaseLock);
-
-        _securityPanel.Controls.Add(CreateLabel("超限自动删除：", 0, 72));
-        _swAutoDelete = new ToggleSwitch { Location = new Point(130, 70) };
-        _securityPanel.Controls.Add(_swAutoDelete);
-
-        Controls.Add(_securityPanel);
-        y += 130;
-
-        // 保存和取消按钮
-        var btnSave = new Button
-        {
-            Text = "保存",
-            Size = new Size(90, 35),
-            Location = new Point(320, y),
-            FlatStyle = FlatStyle.Flat,
-            BackColor = ThemeService.ThemeColor,
-            ForeColor = Color.White
-        };
-        btnSave.FlatAppearance.BorderSize = 0;
-        btnSave.Click += BtnSave_Click;
-
-        var btnCancel = new Button
-        {
-            Text = "取消",
-            Size = new Size(90, 35),
-            Location = new Point(420, y),
-            FlatStyle = FlatStyle.Flat,
+            Text = labelText,
+            AutoSize = true,
             ForeColor = ThemeService.TextColor,
-            BackColor = ThemeService.WindowBackground,
-            DialogResult = DialogResult.Cancel
-        };
-        btnCancel.FlatAppearance.BorderColor = ThemeService.BorderColor;
-
-        Controls.AddRange(new Control[] { btnSave, btnCancel });
-        CancelButton = btnCancel;
+            Margin = new Padding(0, DpiHelper.Scale(3), DpiHelper.Scale(8), 0)
+        });
+        row.Controls.Add(ctrl);
+        return row;
     }
 
     /// <summary>创建统一样式的标签控件</summary>
@@ -349,6 +407,8 @@ public class EditRecordDialog : Form
         _numMaxAttempts.Value = Math.Max(1, Math.Min(100, _record.MaxPasswordAttempts));
         _numBaseLock.Value = Math.Max(1, Math.Min(10080, _record.BaseLockMinutes));
         _swAutoDelete.Checked = _record.AutoDeleteOnExceed;
+        _swAllowSearchEncryptedContent.Checked = _record.AllowSearchEncryptedContent;
+        _swAllowSearchEncryptedHint.Checked = _record.AllowSearchEncryptedHint;
     }
 
     /// <summary>
@@ -461,6 +521,8 @@ public class EditRecordDialog : Form
                 _record.MaxPasswordAttempts = (int)_numMaxAttempts.Value;
                 _record.BaseLockMinutes = (int)_numBaseLock.Value;
                 _record.AutoDeleteOnExceed = _swAutoDelete.Checked;
+                _record.AllowSearchEncryptedContent = _swAllowSearchEncryptedContent.Checked;
+                _record.AllowSearchEncryptedHint = _swAllowSearchEncryptedHint.Checked;
             }
 
             DialogResult = DialogResult.OK;

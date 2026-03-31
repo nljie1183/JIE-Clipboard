@@ -139,6 +139,9 @@ public class AppConfig
     /// <summary>是否允许搜索加密内容（启用后搜索时会临时解密匹配，有一定安全风险）</summary>
     public bool AllowSearchEncryptedContent { get; set; } = false;
 
+    /// <summary>是否允许搜索加密提示文字（启用后搜索时会匹配加密记录的提示字段）</summary>
+    public bool AllowSearchEncryptedHint { get; set; } = false;
+
     // ———— 数据存储 ————
 
     /// <summary>自定义数据存储文件夹路径，空字符串表示使用默认位置（%AppData%\JIE剪切板\）</summary>

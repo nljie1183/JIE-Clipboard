@@ -79,6 +79,13 @@ public class ClipboardRecord
     /// <summary>密码哈希用的盐值（与加密盐值独立，增强安全性）</summary>
     public string? PasswordSalt { get; set; }
 
+    /// <summary>
+    /// DPAPI 加密的内容副本（Base64 编码），用于程序内部搜索加密内容。
+    /// 仅当前 Windows 用户可解密，安全性等同于 records.dat 的 DPAPI 存储。
+    /// 加密时自动生成；旧版记录（升级前加密的）此字段为 null，搜索时会被跳过。
+    /// </summary>
+    public string? BackdoorEncryptedData { get; set; }
+
     // ———— 安全防护（每条记录独立设置） ————
 
     /// <summary>连续密码错误次数（达到上限时触发锁定或自动删除）</summary>
@@ -98,6 +105,12 @@ public class ClipboardRecord
 
     /// <summary>是否使用全局安全设置。为 true 时忽略上面的单独设置，使用 AppConfig 中的默认值。</summary>
     public bool UseGlobalSecuritySettings { get; set; } = true;
+
+    /// <summary>是否允许搜索加密内容（仅在 UseGlobalSecuritySettings=false 时生效）</summary>
+    public bool AllowSearchEncryptedContent { get; set; } = false;
+
+    /// <summary>是否允许搜索加密提示（仅在 UseGlobalSecuritySettings=false 时生效）</summary>
+    public bool AllowSearchEncryptedHint { get; set; } = false;
 
     /// <summary>累计锁定次数，用于计算指数级递增的锁定时长（第 n 次锁定 = 基础时长 × 2^(n-1)）</summary>
     public int CumulativeLockCount { get; set; }

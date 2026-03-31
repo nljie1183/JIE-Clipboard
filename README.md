@@ -23,10 +23,11 @@
 | 📝 **多格式支持** | 文本、富文本、图片、文件、视频、文件夹 |
 | 🔒 **AES-256 加密** | PBKDF2 密码派生（100,000 次迭代），支持自定义加密提示文字 |
 | 💾 **持久化加密存储** | 按类型（图片/文件/视频/文件夹）DPAPI 加密本地缓存 |
+| 🔍 **智能搜索** | 支持搜索加密提示文字和加密内容原文（DPAPI 内部副本，可按需启用） |
 | ⌨️ **全局快捷键** | 自定义快捷键，随时唤醒（默认 `Ctrl+1`） |
 | 🎨 **主题切换** | 浅色 / 深色 / 跟随系统，支持自定义主题色和字体 |
 | 🛡️ **安全防护** | 密码错误指数级锁定、防时间篡改、可选超限自动销毁 |
-| 📌 **智能管理** | 置顶、去重、过期自动清理、复制次数限制、类型过滤 |
+| 📌 **智能管理** | 置顶、去重、过期自动清理、复制次数限制、类型过滤、统计栏点击筛选 |
 | 📦 **导出导入** | 加密备份（JIEEXP 格式），支持导入配置和记录 |
 
 ---
@@ -126,12 +127,12 @@ main/                # 仓库根目录（GitHub 展示文件）
 
     ├── Models/               # 数据模型
     │   ├── AppConfig.cs      #   应用配置（类型过滤、持久化加密、安全策略等）
-    │   └── ClipboardRecord.cs#   剪贴板记录（6 种内容类型 + 加密提示文字）
+    │   └── ClipboardRecord.cs#   剪贴板记录（6 种内容类型 + 加密提示 + DPAPI 搜索副本）
 
     ├── Services/             # 核心服务
     │   ├── ClipboardService.cs   # 剪贴板读写 + 内容预览
     │   ├── DpiHelper.cs          # DPI 缩放工具（高 DPI 屏幕适配）
-    │   ├── EncryptionService.cs  # AES-256-CBC 加密（PBKDF2 100K 迭代）
+    │   ├── EncryptionService.cs  # AES-256-CBC 加密 + DPAPI 内部搜索副本
     │   ├── FileService.cs        # 数据持久化（DPAPI 加密存储 + 文件/文件夹加密）
     │   ├── HotkeyService.cs      # 全局快捷键（Win32 API）
     │   ├── LogService.cs         # 日志记录
@@ -147,11 +148,11 @@ main/                # 仓库根目录（GitHub 展示文件）
     │   └── PasswordDialog.cs     # 密码输入
 
     ├── Pages/                 # 设置页面
-    │   ├── AllRecordsPage.cs     # 全部记录（搜索、筛选、批量操作）
+    │   ├── AllRecordsPage.cs     # 全部记录（搜索、筛选、统计栏点击筛选、批量操作）
     │   ├── GeneralSettingsPage.cs# 通用设置（类型过滤、扩展名、持久化加密）
     │   ├── HotkeyPage.cs         # 快捷键设置
     │   ├── AppearancePage.cs     # 外观主题（主题色、字体、深浅模式）
-    │   ├── SecurityPage.cs       # 安全防护（锁定策略、自动销毁）
+    │   ├── SecurityPage.cs       # 安全防护（锁定策略、自动销毁、搜索加密内容/提示开关）
     │   ├── ExportImportPage.cs   # 导出导入（加密备份 JIEEXP 格式）
     │   └── AboutPage.cs          # 关于
 

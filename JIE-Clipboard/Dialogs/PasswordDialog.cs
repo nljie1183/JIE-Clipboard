@@ -108,10 +108,13 @@ public class PasswordDialog : Form
         Controls.AddRange(new Control[] { lblPrompt, _txtPassword, _chkShow, _btnOk, _btnCancel });
     }
 
-    /// <summary>窗口显示后自动聚焦密码输入框</summary>
+    /// <summary>窗口显示后自动聚焦密码输入框，继承主窗口图标</summary>
     protected override void OnShown(EventArgs e)
     {
         base.OnShown(e);
+        // 继承主窗口图标（Owner 可能为 null，因 ShowDialog 的参数可能是 UserControl）
+        var icon = Owner?.Icon ?? Application.OpenForms.Cast<Form>().FirstOrDefault(f => f.Icon != null)?.Icon;
+        if (icon != null) Icon = icon;
         _txtPassword.Focus();
     }
 }
