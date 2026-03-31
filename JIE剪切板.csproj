@@ -30,7 +30,7 @@
     <!-- 程序集版本号：主版本.次版本.修订.构建 -->
     <AssemblyVersion>3.0.0.9</AssemblyVersion>
     <!-- 文件版本号（显示在文件属性"详细信息"中） -->
-    <FileVersion>3.0.0.9 </FileVersion>
+    <FileVersion>3.0.0.9</FileVersion>
     <!-- 产品名称 -->
     <Product>JIE剪切板</Product>
     <!-- 公司/作者名称 -->
