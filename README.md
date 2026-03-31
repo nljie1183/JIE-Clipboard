@@ -60,11 +60,11 @@
 
 ### 环境要求
 
-| 依赖 | 版本 |
+| 依赖 | 版本 | 地址 |
 |:---|:---|
-| .NET SDK | 8.0 或更高 |
-| 操作系统 | Windows 10/11 x64 |
-| IDE（可选） | Visual Studio 2022 / VS Code / Rider |
+| .NET SDK | 8.0 或更高  | https://dotnet.microsoft.com/zh-cn/download/dotnet/thank-you/sdk-8.0.419-windows-x64-installer |
+| 操作系统 | Windows 10/11 x64 |  |
+| IDE（可选） | Visual Studio 2022 / VS Code  |  |
 
 ### 构建步骤
 

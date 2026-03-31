@@ -181,8 +181,13 @@ public class AllRecordsPage : UserControl
 
                 if (_mainForm.Config.AllowSearchEncryptedContent)
                 {
-                    // 临时解密搜索（需密码，目前仅支持匹配"加密内容"文字）
-                    // 由于无法在无密码的情况下解密，加密搜索功能受限
+                    // 搜索加密记录的可用明文信息：预览文本（含加密提示）和时间
+                    var encPreview = ClipboardService.GetContentPreview(record, 500).ToLower();
+                    var encTime = record.CreateTime.ToLocalTime().ToString("yyyy-MM-dd HH:mm").ToLower();
+                    if (encPreview.Contains(keyword) || encTime.Contains(keyword))
+                    {
+                        result.Add(record);
+                    }
                 }
                 continue;
             }

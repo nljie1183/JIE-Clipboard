@@ -162,6 +162,52 @@ public class MainForm : Form
         SwitchPage(0);
     }
 
+    /// <summary>
+    /// 移除位图四角白色背景（从四角开始洪水填充，将连通的白色/近白色像素变为透明）。
+    /// 用于处理 PNG 图标的圆角矩形四角白色区域。
+    /// </summary>
+    private static void RemoveWhiteBackground(Bitmap bmp)
+    {
+        int w = bmp.Width, h = bmp.Height;
+        var rect = new Rectangle(0, 0, w, h);
+        var data = bmp.LockBits(rect, System.Drawing.Imaging.ImageLockMode.ReadWrite,
+                                System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        int stride = data.Stride;
+        byte[] pixels = new byte[stride * h];
+        System.Runtime.InteropServices.Marshal.Copy(data.Scan0, pixels, 0, pixels.Length);
+
+        var visited = new bool[w, h];
+        var queue = new Queue<(int x, int y)>();
+        queue.Enqueue((0, 0));
+        queue.Enqueue((w - 1, 0));
+        queue.Enqueue((0, h - 1));
+        queue.Enqueue((w - 1, h - 1));
+
+        while (queue.Count > 0)
+        {
+            var (x, y) = queue.Dequeue();
+            if ((uint)x >= (uint)w || (uint)y >= (uint)h) continue;
+            if (visited[x, y]) continue;
+            visited[x, y] = true;
+
+            int offset = y * stride + x * 4; // BGRA 格式
+            byte b = pixels[offset], g = pixels[offset + 1], r = pixels[offset + 2], a = pixels[offset + 3];
+
+            // 仅处理白色/近白色像素（RGB 各通道 > 220）
+            if (r > 220 && g > 220 && b > 220 && a > 0)
+            {
+                pixels[offset + 3] = 0; // Alpha 设为 0（透明）
+                queue.Enqueue((x + 1, y));
+                queue.Enqueue((x - 1, y));
+                queue.Enqueue((x, y + 1));
+                queue.Enqueue((x, y - 1));
+            }
+        }
+
+        System.Runtime.InteropServices.Marshal.Copy(pixels, 0, data.Scan0, pixels.Length);
+        bmp.UnlockBits(data);
+    }
+
     /// <summary>初始化系统托盘图标及右键菜单（显示/监听/退出）</summary>
     private void InitializeTrayIcon()
     {
@@ -199,7 +245,19 @@ public class MainForm : Form
                 using (pngStream)
                 {
                     using var original = new Bitmap(pngStream);
-                    using var resized = new Bitmap(original, 64, 64);
+                    // 移除 PNG 四角白色背景（洪水填充法）
+                    RemoveWhiteBackground(original);
+                    // 高质量缩放并保留透明通道
+                    using var resized = new Bitmap(64, 64, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                    using (var g = Graphics.FromImage(resized))
+                    {
+                        g.Clear(Color.Transparent);
+                        g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                        g.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.HighQuality;
+                        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
+                        g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+                        g.DrawImage(original, 0, 0, 64, 64);
+                    }
                     var hIcon = resized.GetHicon();
                     _trayIcon.Icon = (Icon)Icon.FromHandle(hIcon).Clone();
                     Win32Api.DestroyIcon(hIcon);
