@@ -107,58 +107,73 @@ $s.Save()
 ## 📁 项目结构
 
 ```
-main/                # 仓库根目录（GitHub 展示文件）
-├── LICENSE                   # MIT 开源许可证
-├── README.md                 # 项目说明文档
-├── screenshot.png            # 界面预览截图
-├── .gitignore                # Git 忽略规则（屏蔽 bin/obj/临时/发布产物等）
-
-└── JIE-Clipboard/            # 软件源码目录
-    ├── global.json           # .NET SDK 版本策略配置
-    ├── JIE剪切板.sln         # Visual Studio 解决方案文件
-    ├── JIE剪切板.csproj      # MSBuild 项目文件（编译选项、依赖、嵌入资源）
-    ├── Program.cs            # 程序入口（单实例检测 + 全局异常处理）
-    ├── MainForm.cs           # 主窗口（导航布局、托盘、剪贴板监听、快捷键）
-
-    ├── icon/                 # 图标资源目录
-    │   ├── icon.ico          #   应用图标（EXE 文件图标）
-    │   ├── icon.png          #   高清 PNG 图标（托盘和标题栏，已抠图透明）
-    │   └── 豆包.png          #   豆包 AI 抠图原始素材
-
-    ├── Models/               # 数据模型
-    │   ├── AppConfig.cs      #   应用配置（类型过滤、持久化加密、安全策略等）
-    │   └── ClipboardRecord.cs#   剪贴板记录（6 种内容类型 + 加密提示 + DPAPI 搜索副本）
-
-    ├── Services/             # 核心服务
-    │   ├── ClipboardService.cs   # 剪贴板读写 + 内容预览
-    │   ├── DpiHelper.cs          # DPI 缩放工具（高 DPI 屏幕适配）
-    │   ├── EncryptionService.cs  # AES-256-CBC 加密 + DPAPI 内部搜索副本
-    │   ├── FileService.cs        # 数据持久化（DPAPI 加密存储 + 文件/文件夹加密）
-    │   ├── HotkeyService.cs      # 全局快捷键（Win32 API）
-    │   ├── LogService.cs         # 日志记录
-    │   └── ThemeService.cs       # 主题管理（浅色/深色/跟随系统）
-
-    ├── Controls/              # 自定义控件
-    │   ├── NavigationListBox.cs  # 导航列表（GDI+ 自绘）
-    │   ├── RecordListPanel.cs    # 记录列表（虚拟滚动 + 加密缩略图）
-    │   └── ToggleSwitch.cs       # 开关控件
-
-    ├── Dialogs/               # 对话框
-    │   ├── EditRecordDialog.cs   # 编辑记录（加密/解密、提示文字、安全设置）
-    │   └── PasswordDialog.cs     # 密码输入
-
-    ├── Pages/                 # 设置页面
-    │   ├── AllRecordsPage.cs     # 全部记录（搜索、筛选、统计栏点击筛选、批量操作）
-    │   ├── GeneralSettingsPage.cs# 通用设置（类型过滤、扩展名、持久化加密）
-    │   ├── HotkeyPage.cs         # 快捷键设置
-    │   ├── AppearancePage.cs     # 外观主题（主题色、字体、深浅模式）
-    │   ├── SecurityPage.cs       # 安全防护（锁定策略、自动销毁、搜索加密内容/提示开关）
-    │   ├── ExportImportPage.cs   # 导出导入（加密备份 JIEEXP 格式）
-    │   └── AboutPage.cs          # 关于
-
-    └── Native/                # Windows 原生 API
-        └── Win32Api.cs           # Windows API 声明（P/Invoke）
+main/                              # 仓库根目录
+│
+├── LICENSE                        # MIT 开源许可证
+├── README.md                      # 项目说明文档
+├── screenshot.png                 # 界面预览截图
+├── .gitignore                     # Git 忽略规则
+│
+└── JIE-Clipboard/                 # ─── 软件源码目录 ───
+    │
+    ├── global.json                # .NET SDK 版本策略配置
+    ├── JIE剪切板.sln              # Visual Studio 解决方案文件
+    ├── JIE剪切板.csproj           # MSBuild 项目文件（编译选项、依赖、嵌入资源）
+    ├── Program.cs                 # 程序入口（单实例检测 + 全局异常处理）
+    ├── MainForm.cs                # 主窗口（导航布局、托盘、剪贴板监听、快捷键）
+    │
+    ├── icon/                      # 🎨 图标资源
+    │   ├── icon.ico               #   应用图标（EXE 文件图标）
+    │   ├── icon.png               #   高清 PNG 图标（托盘和标题栏，透明背景）
+    │   └── 豆包.png               #   豆包 AI 抠图原始素材
+    │
+    ├── Models/                    # 📦 数据模型
+    │   ├── AppConfig.cs           #   应用配置（类型过滤、持久化加密、安全策略等）
+    │   └── ClipboardRecord.cs     #   剪贴板记录（6 种内容类型 + 加密提示 + DPAPI 搜索副本）
+    │
+    ├── Services/                  # ⚙️ 核心服务
+    │   ├── ClipboardService.cs    #   剪贴板读写 + 内容预览
+    │   ├── DpiHelper.cs           #   DPI 缩放工具（高 DPI 屏幕适配）
+    │   ├── EncryptionService.cs   #   AES-256-CBC 加密 + DPAPI 内部搜索副本
+    │   ├── FileService.cs         #   数据持久化（DPAPI 加密存储 + 文件/文件夹加密）
+    │   ├── HotkeyService.cs       #   全局快捷键（Win32 API）
+    │   ├── LogService.cs          #   日志记录
+    │   └── ThemeService.cs        #   主题管理（浅色/深色/跟随系统）
+    │
+    ├── Controls/                  # 🧩 自定义控件
+    │   ├── NavigationListBox.cs   #   导航列表（GDI+ 自绘）
+    │   ├── RecordListPanel.cs     #   记录列表（虚拟滚动 + 加密缩略图）
+    │   └── ToggleSwitch.cs        #   开关控件（iOS 风格）
+    │
+    ├── Dialogs/                   # 💬 对话框
+    │   ├── EditRecordDialog.cs    #   编辑记录（加密/解密、提示文字、安全设置）
+    │   └── PasswordDialog.cs      #   密码输入
+    │
+    ├── Pages/                     # 📄 设置页面
+    │   ├── AllRecordsPage.cs      #   全部记录（搜索、筛选、统计栏点击筛选、批量操作）
+    │   ├── GeneralSettingsPage.cs #   通用设置（类型过滤、扩展名、持久化加密）
+    │   ├── HotkeyPage.cs          #   快捷键设置
+    │   ├── AppearancePage.cs      #   外观主题（主题色、字体、深浅模式）
+    │   ├── SecurityPage.cs        #   安全防护（锁定策略、自动销毁、搜索加密开关）
+    │   ├── ExportImportPage.cs    #   导出导入（加密备份 JIEEXP 格式）
+    │   └── AboutPage.cs           #   关于页面
+    │
+    ├── Native/                    # 🖥️ Windows 原生 API
+    │   └── Win32Api.cs            #   Windows API 声明（P/Invoke）
+    │
+    ├── bin/                       # 🔨 编译输出（.gitignore 已忽略）
+    │   ├── Debug/                 #   调试版本（dotnet build 产物）
+    │   └── Release/               #   发布版本（dotnet publish 产物）
+    │       └── win-x64/publish/   #     ← 最终单文件 EXE 在这里
+    │
+    └── obj/                       # 🗂️ 中间文件（.gitignore 已忽略）
+        ├── project.assets.json    #   NuGet 包依赖解析结果
+        ├── Debug/                 #   调试构建的中间产物（.dll、.cs 自动生成文件）
+        └── Release/               #   发布构建的中间产物
 ```
+
+> **💡 提示：** `bin/` 和 `obj/` 目录由编译器自动生成，已被 `.gitignore` 忽略，不会提交到仓库。
+> 克隆仓库后首次执行 `dotnet build` 或 `dotnet publish` 时会自动创建。
 
 ---
 
