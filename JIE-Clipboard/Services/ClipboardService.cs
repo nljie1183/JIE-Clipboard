@@ -253,20 +253,22 @@ public static class ClipboardService
     }
 
     /// <summary>
-    /// 启动时清理上次崩溃残留的临时文件（崩溃恢复）。
-    /// 扫描 temp 目录中以 jie_clip_、jie_zip_、jie_folder_ 前缀的文件/文件夹。
+    /// 清理残留的临时文件（崩溃恢复 + 定期清理）。
+    /// 启动时 maxAge=Zero 清理所有；运行中 maxAge 可设为 2 分钟，避免误删正在使用的文件。
     /// </summary>
-    public static void CleanupStaleTempFiles()
+    public static void CleanupStaleTempFiles(TimeSpan? maxAge = null)
     {
         try
         {
             var tempDir = Path.GetTempPath();
+            var cutoff = maxAge.HasValue ? DateTime.UtcNow - maxAge.Value : DateTime.MaxValue;
+
             foreach (var f in Directory.GetFiles(tempDir, "jie_clip_*"))
-                try { File.Delete(f); } catch { }
+                try { if (cutoff == DateTime.MaxValue || File.GetLastWriteTimeUtc(f) < cutoff) File.Delete(f); } catch { }
             foreach (var f in Directory.GetFiles(tempDir, "jie_zip_*"))
-                try { File.Delete(f); } catch { }
+                try { if (cutoff == DateTime.MaxValue || File.GetLastWriteTimeUtc(f) < cutoff) File.Delete(f); } catch { }
             foreach (var d in Directory.GetDirectories(tempDir, "jie_folder_*"))
-                try { Directory.Delete(d, true); } catch { }
+                try { if (cutoff == DateTime.MaxValue || Directory.GetLastWriteTimeUtc(d) < cutoff) Directory.Delete(d, true); } catch { }
         }
         catch (Exception ex)
         {

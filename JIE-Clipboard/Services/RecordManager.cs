@@ -24,6 +24,9 @@ public class RecordManager : IDisposable
     private System.Windows.Forms.Timer? _saveThrottleTimer;
     private bool _saveDataPending;
 
+    // ==================== 防重入 ====================
+    private bool _isProcessing; // 剪贴板处理流水线防重入标志
+
     /// <summary>记录列表发生变化时触发，通知 UI 刷新</summary>
     public event Action? RecordsChanged;
 
@@ -47,10 +50,13 @@ public class RecordManager : IDisposable
     /// <summary>
     /// 处理剪贴板内容变化（核心流水线）。
     /// 由 MainForm.WndProc 收到 WM_CLIPBOARDUPDATE 后调用。
-    /// 流程：读取 → 类型过滤 → 后缀过滤 → 大小限制 → 去重 → 持久化 → 裁剪 → 保存
+    /// 流程：读取 → 类型过滤 → 后缀过滤 → 大小限制 → 去重 → 持久化(后台) → 裁剪 → 保存
+    /// async void：WndProc 回调，已用 try-catch + 防重入保护。
     /// </summary>
-    public void ProcessClipboardUpdate()
+    public async void ProcessClipboardUpdate()
     {
+        if (_isProcessing) return;
+        _isProcessing = true;
         try
         {
             var record = ClipboardService.ReadFromClipboard();
@@ -91,8 +97,12 @@ public class RecordManager : IDisposable
 
             Records.Insert(0, record);
 
+            // 先通知 UI 显示新记录（让用户立即看到）
+            RecordsChanged?.Invoke();
+
             // 按类型应用持久化加密存储（图片/文件/视频/文件夹）
-            ApplyPersistentStorage(record);
+            // 文件加密/压缩是重 I/O 操作，放到后台线程避免阻塞 UI
+            await Task.Run(() => ApplyPersistentStorage(record));
 
             // 强制最大记录数限制
             TrimExcessRecords();
@@ -103,6 +113,10 @@ public class RecordManager : IDisposable
         catch (Exception ex)
         {
             LogService.Log("Clipboard update handler failed", ex);
+        }
+        finally
+        {
+            _isProcessing = false;
         }
     }
 

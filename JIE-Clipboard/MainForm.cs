@@ -51,6 +51,7 @@ public class MainForm : Form
     private bool _suppressAutoHide;                  // 对话框交互期间阻止自动隐藏
     private System.Windows.Forms.Timer? _clipboardWatchdog;  // 看门狗定时器（30s 检查监听是否中断）
     private DateTime _lastClipboardUpdate = DateTime.UtcNow; // 上次收到剪贴板更新的时间（用于看门狗判断）
+    private int _watchdogTickCount;                  // 看门狗计数器（每 5 次≈2.5 分钟清理临时文件）
 
     /// <summary>
     /// 贴入模式下阻止窗口被激活（ShowWithoutActivation = true），
@@ -464,6 +465,10 @@ public class MainForm : Form
             }
 
             _recordManager.CleanupExpiredRecords();
+
+            // 每 5 次看门狗周期（≈2.5 分钟）清理一次残留临时文件（仅删超过 2 分钟的）
+            if (++_watchdogTickCount % 5 == 0)
+                ClipboardService.CleanupStaleTempFiles(TimeSpan.FromMinutes(2));
         }
         catch (Exception ex)
         {
@@ -522,7 +527,9 @@ public class MainForm : Form
                 await Task.Delay(50);
                 Win32Api.SetForegroundWindow(targetWindow);
                 await Task.Delay(100);
-                Win32Api.SendCtrlV();
+                // 确认目标窗口确实获得了焦点再发送粘贴（防止竞态发到错误窗口）
+                if (Win32Api.GetForegroundWindow() == targetWindow)
+                    Win32Api.SendCtrlV();
             }
         }
         catch (Exception ex)
