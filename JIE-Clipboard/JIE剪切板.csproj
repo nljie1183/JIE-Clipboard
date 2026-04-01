@@ -28,9 +28,9 @@
     <!-- 根命名空间（代码文件中 namespace 的默认前缀） -->
     <RootNamespace>JIE剪切板</RootNamespace>
     <!-- 程序集版本号：主版本.次版本.修订.构建 -->
-    <AssemblyVersion>3.0.2.1</AssemblyVersion>
+    <AssemblyVersion>3.1.0.0</AssemblyVersion>
     <!-- 文件版本号（显示在文件属性"详细信息"中） -->
-    <FileVersion>3.0.2.1</FileVersion>
+    <FileVersion>3.1.0.0</FileVersion>
     <!-- 产品名称 -->
     <Product>JIE剪切板</Product>
     <!-- 公司/作者名称 -->

@@ -101,7 +101,6 @@ public class EditRecordDialog : Form
             Anchor = AnchorStyles.Top | AnchorStyles.Right
         };
         btnCancel.FlatAppearance.BorderColor = ThemeService.BorderColor;
-        btnCancel.Location = new Point(ClientSize.Width - pad - btnCancel.Width, DpiHelper.Scale(10));
 
         var btnSave = new Button
         {
@@ -114,9 +113,9 @@ public class EditRecordDialog : Form
         };
         btnSave.FlatAppearance.BorderSize = 0;
         btnSave.Click += BtnSave_Click;
-        btnSave.Location = new Point(btnCancel.Left - DpiHelper.Scale(8) - btnSave.Width, DpiHelper.Scale(10));
 
         buttonBar.Controls.AddRange(new Control[] { btnSave, btnCancel });
+        AcceptButton = btnSave;
         CancelButton = btnCancel;
 
         // ───── 可滚动内容区域 ─────
@@ -127,9 +126,13 @@ public class EditRecordDialog : Form
         };
 
         // 先将面板加入 Form 让 Dock 布局生效，再添加子控件，
-        // 否则 Anchor = Left|Right 基于 scroll 默认宽度计算右边距会出错
+        // 否则 Anchor = Left|Right 基于父控件默认宽度计算右边距会出错
         Controls.Add(scroll);
         Controls.Add(buttonBar);
+
+        // buttonBar 已 Dock 到 Form，现在有正确宽度，可以安全定位按钮
+        btnCancel.Location = new Point(buttonBar.ClientSize.Width - pad - btnCancel.Width, DpiHelper.Scale(10));
+        btnSave.Location = new Point(btnCancel.Left - DpiHelper.Scale(8) - btnSave.Width, DpiHelper.Scale(10));
 
         // 现在 scroll 已有正确尺寸，基于它计算子控件宽度
         int ctrlW = scroll.ClientSize.Width - pad * 2;
