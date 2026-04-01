@@ -190,6 +190,7 @@ public class ExportImportPage : UserControl
     /// <summary>导出按钮点击：验证选项、选择文件位置、执行导出</summary>
     private void BtnExport_Click(object? sender, EventArgs e)
     {
+        _mainForm.SuppressAutoHide(true);
         try
         {
             if (!_chkExportRecords.Checked && !_chkExportConfig.Checked)
@@ -237,12 +238,14 @@ public class ExportImportPage : UserControl
             LogService.Log("Export button handler failed", ex);
             SetStatus($"导出失败: {ex.Message}", Color.Red);
         }
+        finally { _mainForm.SuppressAutoHide(false); }
     }
 
     /// <summary>执行导入操作（合并或覆盖）</summary>
     /// <param name="overwrite">true=覆盖现有数据，false=合并（跳过重复 ID）</param>
     private void DoImport(bool overwrite)
     {
+        _mainForm.SuppressAutoHide(true);
         try
         {
             using var dialog = new OpenFileDialog
@@ -317,6 +320,7 @@ public class ExportImportPage : UserControl
             LogService.Log("Import handler failed", ex);
             SetStatus($"导入失败: {ex.Message}", Color.Red);
         }
+        finally { _mainForm.SuppressAutoHide(false); }
     }
 
     /// <summary>更新状态提示标签</summary>
