@@ -119,7 +119,7 @@ public class RecordListPanel : Panel
             if (_records.Count == 0)
             {
                 using var brush = new SolidBrush(ThemeService.SecondaryTextColor);
-                var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+                using var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
                 g.DrawString("暂无记录", ThemeService.GlobalFont, brush, new RectangleF(0, 0, clientWidth, Height), sf);
                 return;
             }
@@ -177,13 +177,13 @@ public class RecordListPanel : Panel
         var preview = ClipboardService.GetContentPreview(record, 120);
         var textRect = new Rectangle(leftMargin, rect.Y + DpiHelper.Scale(8), contentWidth, _itemHeight - DpiHelper.Scale(16));
         using (var textBrush = new SolidBrush(ThemeService.TextColor))
+        using (var sf = new StringFormat
         {
-            var sf = new StringFormat
-            {
-                Trimming = StringTrimming.EllipsisCharacter,
-                FormatFlags = StringFormatFlags.NoWrap,
-                LineAlignment = StringAlignment.Center
-            };
+            Trimming = StringTrimming.EllipsisCharacter,
+            FormatFlags = StringFormatFlags.NoWrap,
+            LineAlignment = StringAlignment.Center
+        })
+        {
             g.DrawString(preview, ThemeService.GlobalFont, textBrush, textRect, sf);
         }
 
@@ -191,8 +191,8 @@ public class RecordListPanel : Panel
         var timeStr = FormatTime(record.CreateTime);
         var timeRect = new Rectangle(rect.Right - rightMargin, rect.Y + DpiHelper.Scale(8), rightMargin - DpiHelper.Scale(10), _itemHeight - DpiHelper.Scale(16));
         using (var timeBrush = new SolidBrush(ThemeService.SecondaryTextColor))
+        using (var sf = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center })
         {
-            var sf = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center };
             g.DrawString(timeStr, GetSmallFont(), timeBrush, timeRect, sf);
         }
 

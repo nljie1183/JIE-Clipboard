@@ -138,6 +138,18 @@ public class AllRecordsPage : UserControl
         Controls.Add(_statsBar);
     }
 
+    /// <summary>释放非控件子对象（定时器、上下文菜单），防止主题切换时泄漏</summary>
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _searchDebounceTimer?.Stop();
+            _searchDebounceTimer?.Dispose();
+            _recordContextMenu?.Dispose();
+        }
+        base.Dispose(disposing);
+    }
+
     /// <summary>创建统一样式的操作按钮</summary>
     private Button CreateButton(string text, Color borderColor)
     {

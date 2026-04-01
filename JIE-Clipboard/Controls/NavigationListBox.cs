@@ -122,15 +122,15 @@ public class NavigationListBox : Control
         // 绘制 Emoji 图标
         var iconRect = new Rectangle(iconLeft, rect.Y + (itemH - iconSize) / 2, iconSize, iconSize);
         using (var iconBrush = new SolidBrush(textColor))
+        using (var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
         {
-            var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
             g.DrawString(item.Icon, _iconFont, iconBrush, iconRect, sf);
         }
 
         // 绘制文本
         var textRect = new Rectangle(textLeft, rect.Y, rect.Width - textLeft - DpiHelper.Scale(5), itemH);
         using var textBrush = new SolidBrush(textColor);
-        var textFormat = new StringFormat
+        using var textFormat = new StringFormat
         {
             Alignment = StringAlignment.Near,
             LineAlignment = StringAlignment.Center,
