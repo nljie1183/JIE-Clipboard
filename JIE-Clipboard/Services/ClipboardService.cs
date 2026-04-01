@@ -26,6 +26,9 @@ public static class ClipboardService
     /// <summary>自写保护延迟（ms）：递减前等待系统投递 WM_CLIPBOARDUPDATE</summary>
     private const int SelfWriteGuardDelayMs = 100;
 
+    /// <summary>最后一次自写记录的内容 hash（用于精准过滤自写回流，比纯时间窗更可靠）</summary>
+    private static volatile string? _lastWrittenHash;
+
     /// <summary>跟踪待清理的临时文件路径（线程安全）</summary>
     private static readonly ConcurrentBag<string> _pendingTempFiles = new();
 
@@ -59,7 +62,7 @@ public static class ClipboardService
     /// <returns>剪贴板记录；无内容或失败时返回 null</returns>
     public static ClipboardRecord? ReadFromClipboard()
     {
-        // 如果是我们自己写入的，跳过读取（避免重复记录）
+        // 如果是我们自己写入的，跳过读取（时间窗保护）
         if (IsSelfWriting) return null;
 
         // 重试机制：指数退避（50/100/200/400/800ms），共 5 次，总窗口约 1.5 秒
@@ -72,15 +75,27 @@ public static class ClipboardService
                 if (attempt > 0) Thread.Sleep(50 * (1 << (attempt - 1))); // 50, 100, 200, 400ms
 
                 // 按优先级检测剪贴板内容类型
+                ClipboardRecord? record = null;
                 if (Clipboard.ContainsFileDropList())
-                    return ReadFileDropList();       // 文件/文件夹/视频
-                if (Clipboard.ContainsImage())
-                    return ReadImage();              // 图片
-                if (Clipboard.ContainsData(DataFormats.Rtf))
-                    return ReadRtfText();            // RTF 富文本
-                if (Clipboard.ContainsText())
-                    return ReadPlainText();           // 纯文本
-                return null;
+                    record = ReadFileDropList();       // 文件/文件夹/视频
+                else if (Clipboard.ContainsImage())
+                    record = ReadImage();              // 图片
+                else if (Clipboard.ContainsData(DataFormats.Rtf))
+                    record = ReadRtfText();            // RTF 富文本
+                else if (Clipboard.ContainsText())
+                    record = ReadPlainText();           // 纯文本
+
+                if (record == null) return null;
+
+                // 内容签名比对：精准过滤自写回流（时间窗已过但 hash 仍匹配的情况）
+                var lastHash = _lastWrittenHash;
+                if (lastHash != null && record.ContentHash == lastHash)
+                {
+                    _lastWrittenHash = null; // 一次匹配后清除，不影响后续相同内容的真实复制
+                    return null;
+                }
+
+                return record;
             }
             catch (System.Runtime.InteropServices.ExternalException) when (attempt < maxAttempts - 1)
             {
@@ -110,6 +125,8 @@ public static class ClipboardService
         {
             // 标记开始自写，阻止 OnClipboardUpdate 处理自己的写入
             Interlocked.Increment(ref _selfWriteCount);
+            // 记录本次写入内容的 hash，用于精准过滤回流（双重保护：时间窗 + 签名比对）
+            _lastWrittenHash = record.ContentHash;
             var content = decryptedContent ?? record.Content;
             var type = record.ContentType;
 

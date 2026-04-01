@@ -475,6 +475,18 @@ public static class FileService
             var tempFolder = Path.Combine(Path.GetTempPath(), $"jie_folder_{Guid.NewGuid():N}");
             ZipFile.ExtractToDirectory(tempZip, tempFolder);
 
+            // Zip Slip 防护：校验解压出的所有文件是否都在目标目录内
+            var fullTempFolder = Path.GetFullPath(tempFolder) + Path.DirectorySeparatorChar;
+            foreach (var file in Directory.GetFiles(tempFolder, "*", SearchOption.AllDirectories))
+            {
+                if (!Path.GetFullPath(file).StartsWith(fullTempFolder, StringComparison.OrdinalIgnoreCase))
+                {
+                    LogService.Log($"Zip Slip detected: {file} escapes {tempFolder}");
+                    try { Directory.Delete(tempFolder, true); } catch { }
+                    return null;
+                }
+            }
+
             // ZIP 压缩时包含了基目录，所以解压后只有一个子目录
             var subdirs = Directory.GetDirectories(tempFolder);
             return subdirs.Length == 1 ? subdirs[0] : tempFolder;

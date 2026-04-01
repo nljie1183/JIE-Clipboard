@@ -52,6 +52,7 @@ public class MainForm : Form
     private System.Windows.Forms.Timer? _clipboardWatchdog;  // 看门狗定时器（30s 检查监听是否中断）
     private DateTime _lastClipboardUpdate = DateTime.UtcNow; // 上次收到剪贴板更新的时间（用于看门狗判断）
     private int _watchdogTickCount;                  // 看门狗计数器（每 5 次≈2.5 分钟清理临时文件）
+    private DateTime _lastBalloonTime;               // 上次托盘气泡时间（节流用，防连续弹出）
 
     /// <summary>
     /// 贴入模式下阻止窗口被激活（ShowWithoutActivation = true），
@@ -548,9 +549,15 @@ public class MainForm : Form
                 else
                 {
                     LogService.Log("HideAndPaste: target window activation timed out");
-                    _trayIcon.ShowBalloonTip(2000, "JIE 剪切板",
-                        "已复制到剪贴板，但自动粘贴失败（目标窗口未响应）。请手动 Ctrl+V。",
-                        ToolTipIcon.Warning);
+                    // 节流：5 秒内不重复弹气泡（防止连续粘贴失败刷屏）
+                    var now = DateTime.UtcNow;
+                    if ((now - _lastBalloonTime).TotalSeconds >= 5)
+                    {
+                        _lastBalloonTime = now;
+                        _trayIcon.ShowBalloonTip(2000, "JIE 剪切板",
+                            "已复制到剪贴板，但自动粘贴失败（目标窗口未响应）。请手动 Ctrl+V。",
+                            ToolTipIcon.Warning);
+                    }
                 }
             }
         }
