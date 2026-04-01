@@ -80,7 +80,7 @@ public class AllRecordsPage : UserControl
         _searchBox.TextChanged += SearchBox_TextChanged;
         searchPanel.Controls.Add(_searchBox);
 
-        // 操作按钮区
+        // 操作按钮区（FlowLayoutPanel 自动换行，适应不同窗口宽度）
         _buttonPanel = new Panel { Dock = DockStyle.Top, Height = DpiHelper.Scale(45), Padding = new Padding(DpiHelper.Scale(15), DpiHelper.Scale(5), DpiHelper.Scale(15), DpiHelper.Scale(5)) };
         var btnNewRecord = CreateButton("新建记录", Color.FromArgb(40, 167, 69));
         btnNewRecord.Click += BtnNewRecord_Click;
@@ -93,8 +93,9 @@ public class AllRecordsPage : UserControl
         var btnClearUnpinned = CreateButton("清除非固定记录", ThemeService.ThemeColor);
         btnClearUnpinned.Click += BtnClearUnpinned_Click;
 
-        var flow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false };
+        var flow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = true };
         flow.Controls.AddRange(new Control[] { btnNewRecord, btnClearAll, btnClearBefore, btnClearAfter, btnClearUnpinned });
+        flow.Layout += (_, _) => AdjustButtonPanelHeight(flow);
         _buttonPanel.Controls.Add(flow);
 
         // 记录列表控件
@@ -152,15 +153,17 @@ public class AllRecordsPage : UserControl
         base.Dispose(disposing);
     }
 
-    /// <summary>创建统一样式的操作按钮</summary>
+    /// <summary>创建统一样式的操作按钮（AutoSize 根据文字自适应宽度）</summary>
     private Button CreateButton(string text, Color borderColor)
     {
         var btn = new Button
         {
             Text = text,
             FlatStyle = FlatStyle.Flat,
-            Size = new Size(DpiHelper.Scale(140), DpiHelper.Scale(30)),
-            Margin = new Padding(0, 0, DpiHelper.Scale(10), 0),
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            Margin = new Padding(0, 0, DpiHelper.Scale(6), DpiHelper.Scale(4)),
+            Padding = new Padding(DpiHelper.Scale(8), DpiHelper.Scale(2), DpiHelper.Scale(8), DpiHelper.Scale(2)),
             Font = new Font(ThemeService.GlobalFont.FontFamily, 8.5f),
             ForeColor = borderColor,
             BackColor = ThemeService.WindowBackground
@@ -168,6 +171,18 @@ public class AllRecordsPage : UserControl
         btn.FlatAppearance.BorderColor = borderColor;
         btn.FlatAppearance.BorderSize = 1;
         return btn;
+    }
+
+    /// <summary>根据 FlowLayoutPanel 子控件的实际布局高度，动态调整按钮区面板高度</summary>
+    private void AdjustButtonPanelHeight(FlowLayoutPanel flow)
+    {
+        if (flow.Controls.Count == 0) return;
+        int maxBottom = 0;
+        foreach (Control c in flow.Controls)
+            maxBottom = Math.Max(maxBottom, c.Bottom + c.Margin.Bottom);
+        int newHeight = maxBottom + _buttonPanel.Padding.Top + _buttonPanel.Padding.Bottom;
+        if (_buttonPanel.Height != newHeight)
+            _buttonPanel.Height = newHeight;
     }
 
     /// <summary>刷新记录列表：应用搜索过滤，按置顶+时间排序，更新状态栏</summary>
@@ -611,7 +626,11 @@ public class AllRecordsPage : UserControl
         _statsBar.Invalidate();
     }
 
-    /// <summary>自绘状态栏：显示全部记录数、置顶数、加密数、搜索结果数</summary>
+    /// <summary>
+    /// 自绘状态栏：显示全部记录数、置顶数、加密数。
+    /// 搜索时统计数字自动变为匹配搜索条件的记录数（而非总数）。
+    /// 筛选使用 IsPinned / IsEncrypted 属性判断，非字符串匹配。
+    /// </summary>
     private void StatsBar_Paint(object? sender, PaintEventArgs e)
     {
         try
@@ -630,21 +649,28 @@ public class AllRecordsPage : UserControl
             using var themeBrush = new SolidBrush(ThemeService.ThemeColor);
 
             int x = DpiHelper.Scale(15);
-            var records = _mainForm.Records;
+            var allRecords = _mainForm.Records;
+            bool isSearching = !string.IsNullOrEmpty(_searchText);
+
+            // 搜索时：统计数字反映搜索结果中的分布，否则显示总数
+            List<ClipboardRecord>? searchResults = null;
+            if (isSearching)
+                searchResults = ApplySearch(allRecords);
+
+            var source = searchResults ?? allRecords;
+            int totalCount = source.Count;
+            int pinnedCount = source.Count(r => r.IsPinned);
+            int encryptedCount = source.Count(r => r.IsEncrypted);
+
             // 统计数字高亮：当前筛选项用 themeBrush，否则用 grayBrush
             Brush allBrush = _currentFilter == FilterType.All ? themeBrush : grayBrush;
             Brush pinnedBrush = _currentFilter == FilterType.Pinned ? themeBrush : grayBrush;
             Brush encryptedBrush = _currentFilter == FilterType.Encrypted ? themeBrush : grayBrush;
 
-            _rectAll = DrawStat(g, "全部记录：", records.Count.ToString(), "条", x, font, boldFont, grayBrush, allBrush);
-            _rectPinned = DrawStat(g, "置顶记录：", records.Count(r => r.IsPinned).ToString(), "条", _rectAll.Right + DpiHelper.Scale(30), font, boldFont, grayBrush, pinnedBrush);
-            _rectEncrypted = DrawStat(g, "加密记录：", records.Count(r => r.IsEncrypted).ToString(), "条", _rectPinned.Right + DpiHelper.Scale(30), font, boldFont, grayBrush, encryptedBrush);
-
-            if (!string.IsNullOrEmpty(_searchText) && _searchText != "搜索剪贴板记录")
-            {
-                var filtered = ApplySearch(records);
-                DrawStat(g, "搜索结果：", filtered.Count.ToString(), "条", _rectEncrypted.Right + DpiHelper.Scale(30), font, boldFont, grayBrush, themeBrush);
-            }
+            string allLabel = isSearching ? "匹配记录：" : "全部记录：";
+            _rectAll = DrawStat(g, allLabel, totalCount.ToString(), "条", x, font, boldFont, grayBrush, allBrush);
+            _rectPinned = DrawStat(g, "置顶记录：", pinnedCount.ToString(), "条", _rectAll.Right + DpiHelper.Scale(20), font, boldFont, grayBrush, pinnedBrush);
+            _rectEncrypted = DrawStat(g, "加密记录：", encryptedCount.ToString(), "条", _rectPinned.Right + DpiHelper.Scale(20), font, boldFont, grayBrush, encryptedBrush);
         }
         catch { }
     }
